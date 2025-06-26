@@ -56,38 +56,57 @@ export const ItemHolding = z.object({
 
 export type Action = {};
 
-// export const X = Move;
+export type GameId = z.infer<typeof GameId>;
+export const GameId = z.string().uuid();
+
+export type GameMetadata = z.infer<typeof GameMetadata>;
+export const GameMetadata = z.object({
+  id: GameId,
+  name: z.string(),
+  creationDateTime: z
+    .string()
+    .datetime()
+    .transform((s) => new Date(s)),
+});
 
 export type Game = z.infer<typeof Game>;
 export const Game = z.object({
+  metadata: GameMetadata,
   // things
   locations: z
-    .map(LocationName, Location)
+    .record(LocationName, Location)
+    .transform((x) => new Map(Object.entries(x)))
     .describe("Associates each location's name with that location data"),
   items: z
-    .map(ItemName, Item)
+    .record(ItemName, Item)
+    .transform((x) => new Map(Object.entries(x)))
     .describe("Associates each item's name with that item's data"),
   characters: z
-    .map(CharacterName, Character)
+    .record(CharacterName, Character)
+    .transform((x) => new Map(Object.entries(x)))
     .describe("Associates each character's name with that character's data"),
   // relationships
   characterLocations: z
-    .map(CharacterName, CharacterLocation)
+    .record(CharacterName, CharacterLocation)
+    .transform((x) => new Map(Object.entries(x)))
     .describe(
       "Associates each character's name with the name of the location where the character currently is.",
     ),
   characterInventories: z
-    .map(CharacterName, z.array(ItemHolding))
+    .record(CharacterName, z.array(ItemHolding))
+    .transform((x) => new Map(Object.entries(x)))
     .describe(
       "Associates each character's name with an array of the names of the items that the character is holding in some way.",
     ),
   locationItems: z
-    .map(LocationName, z.array(ItemPlacement))
+    .record(LocationName, z.array(ItemPlacement))
+    .transform((x) => new Map(Object.entries(x)))
     .describe(
       "Associates each location's name with an array of the placements of items in that location.",
     ),
   locationAdjecencies: z
-    .map(LocationName, z.array(LocationName))
+    .record(LocationName, z.array(LocationName))
+    .transform((x) => new Map(Object.entries(x)))
     .describe(
       "Associates each location's name with an array of the names of the locations that are adjacent to that location.",
     ),
