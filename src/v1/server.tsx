@@ -1,8 +1,18 @@
-import { genkit, z } from "genkit";
+import { genkit, Part, ToolArgument, z } from "genkit";
 import index from "./index.html";
 import googleAI from "@genkit-ai/googleai";
-import { Game, GameId, GameMetadata, LocationName } from "./ontology";
+import {
+  Action,
+  Game,
+  GameId,
+  GameMetadata,
+  ItemPlacement,
+  LocationName,
+  PlayerDropItem,
+  PlayerTakeItem,
+} from "./ontology";
 import * as fs from "fs/promises";
+import { DynamicToolAction, ToolAction } from "@genkit-ai/ai/tool";
 
 // constants
 
@@ -59,7 +69,7 @@ let game: Game = newGame();
 
 // prompt utilities
 
-const getGameDescription = (game: Game): string => {
+const getGameDescription = (game: Game): Part => {
   const adjacentLocations = game.state.locationAdjecencies.get(
     game.state.player.location,
   )!;
@@ -73,7 +83,7 @@ const getGameDescription = (game: Game): string => {
     )
     .toArray();
 
-  return `
+  const content = `
 # Game State
 
 ## Game Setting
@@ -117,6 +127,10 @@ ${game.state.npcLocatings
 
 
   `.trim();
+
+  const url = `data:text/markdown;base64,${Buffer.from(content, "utf8").toString("base64")}`;
+
+  return { media: { url } };
 };
 
 // ai flows
@@ -133,23 +147,102 @@ const updateGame = ai.defineFlow(
     }),
   },
   async (input) => {
-    // use model to make plan for how to update Game
-    const plan = await ai.generate({
-      model: googleAI.model("gemini-2.0-pro-exp-02-05"),
+    const prelude = `
+You are the game master for a unique and creative text adventure game.
+      `.trim();
+
+    const initialDescription = await ai.generate({
+      model: googleAI.model("gemini-2.5-flash-preview-04-17"),
       system: `
-You are the game master for a uniquely creative text adventure game. The user will describe in natural langauge what they want to do next in the game. Your task is to consider the user's description in order to decide exactly how the player's character will act and what will happen as an immediate consequence of that in the game.
+${prelude}
 
-TODO: tell how to create plan
-
-The following is a summary of the current state of the game:
-${getGameDescription(game)}
+The user will describe in natural langauge what they want to do next in the game. Your task is to consider the user's description in order to reply with a one-paragraph description of what the player does next and what happens in the game as an immediate consequence.
       `.trim(),
-      prompt: `${input.prompt}`,
+      prompt: [getGameDescription(game), { text: `${input.prompt}` }],
     });
+
+    const ActionOutput = z.union([
+      z.object({
+        type: z.literal("success"),
+      }),
+      z.object({
+        type: z.literal("failure"),
+        reason: z.string(),
+      }),
+    ]);
+
+    const actions: Action[] = [];
+
     // interpret plan as sequence of Actions
+    const actionDescriptions = await ai.generate({
+      model: googleAI.model("gemini-2.5-flash-preview-04-17"),
+      system: `
+${prelude}
+
+The user will provide a description of what the player does next and what happens in the game as an immediate consequence. Your task is to consider this natural-language description and interpret it as a sequence of structured actions.
+        `.trim(),
+      tools: [
+        ai.dynamicTool(
+          {
+            name: "PlayerTakeItem",
+            description:
+              "The player takes an item from their current location into their inventory.",
+            inputSchema: PlayerTakeItem,
+            outputSchema: ActionOutput,
+          },
+          async (input) => {
+            const itemPlacementIsTargetItem = (
+              itemPlacement: ItemPlacement,
+            ): boolean => itemPlacement.item !== input.item;
+
+            // remove item from location
+            const locationItemPlacements = game.state.locationItems.get(
+              game.state.player.location,
+            )!;
+
+            if (
+              locationItemPlacements.find(itemPlacementIsTargetItem) ===
+              undefined
+            )
+              return {
+                type: "failure" as const,
+                reason: `There is no item with the name "${input.item}" in the player's current location.`,
+              };
+
+            game.state.locationItems.set(
+              game.state.player.location,
+              locationItemPlacements.filter(
+                (itemPlacement) => itemPlacement.item !== input.item,
+              ),
+            );
+
+            // add item to player inventory
+            game.state.player.inventory.push({
+              item: input.item,
+              description: input.holdingDescription,
+            });
+
+            // record action
+            actions.push(input);
+
+            return {
+              type: "success" as const,
+            };
+          },
+        ),
+        ai.dynamicTool({
+          name: "PlayerDropItem",
+          description:
+            "The player drops an item from their inventory into their current location.",
+          inputSchema: PlayerDropItem,
+          outputSchema: ActionOutput,
+        }),
+        // TODO: tools for other actions
+      ],
+      prompt: initialDescription.text,
+    });
     // execute actions
     // generate a summary of what happened and add the transcript of game
-
     // TODO
     return {
       game: input.game,

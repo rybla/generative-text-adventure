@@ -105,6 +105,11 @@ export const PlayerTakeItem = z.object({
     .describe(
       "A concise one-sentence description of how the player takes the item",
     ),
+  holdingDescription: z
+    .string()
+    .describe(
+      "A concise one-sentence description of exactly how the item is being held or otherwise stored by player",
+    ),
 });
 
 export type PlayerDropItem = z.infer<typeof PlayerDropItem>;
