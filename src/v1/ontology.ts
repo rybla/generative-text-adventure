@@ -1,60 +1,244 @@
 import { z } from "genkit";
 
+// ------------------------------------------------
+// Names
+// ------------------------------------------------
+
 export type LocationName = z.infer<typeof LocationName>;
-const LocationName = z.string();
+export const LocationName = z.string().brand<"LocationName">();
 
 export type ItemName = z.infer<typeof ItemName>;
-const ItemName = z.string();
+export const ItemName = z.string().brand<"ItemName">();
 
-export type CharacterName = z.infer<typeof CharacterName>;
-const CharacterName = z.string();
+export type NpcName = z.infer<typeof NpcName>;
+export const NpcName = z.string().brand<"NpcName">();
+
+// ------------------------------------------------
+// Item
+// ------------------------------------------------
 
 export type Item = z.infer<typeof Item>;
 export const Item = z.object({
-  name: z.string().describe("The name of the item"),
-  description: z.string().describe("A short description of the item"),
-});
-
-export type Location = z.infer<typeof Location>;
-export const Location = z.object({
-  name: z.string().describe("The name of the location"),
-  description: z.string().describe("A short description of the location."),
-});
-
-export type Character = z.infer<typeof Character>;
-export const Character = z.object({
-  name: z.string().describe("The name of the character."),
-  description: z.string().describe("A short descriptionˇ of the character."),
-});
-
-export type CharacterLocation = z.infer<typeof CharacterLocation>;
-export const CharacterLocation = z.object({
+  name: ItemName.describe("The name of the item"),
   description: z
     .string()
-    .describe(
-      "A description of where exactly in the location the character currently is.",
-    ),
+    .describe("A concise one-paragraph description of the item"),
 });
 
 export type ItemPlacement = z.infer<typeof ItemPlacement>;
 export const ItemPlacement = z.object({
+  item: ItemName.describe("The item"),
   description: z
     .string()
     .describe(
-      "A description of how exactly the item is placed in the location.",
+      "A concise one-sentence description of exactly how the item is placed in the location",
     ),
 });
 
 export type ItemHolding = z.infer<typeof ItemHolding>;
 export const ItemHolding = z.object({
+  item: ItemName.describe("The item"),
   description: z
     .string()
     .describe(
-      "A description of how exactly the item is being held by a character.",
+      "A concise one-sentence description of exactly how the item is being held or otherwise stored by an NPC or the player",
     ),
 });
 
-export type Action = {};
+// ------------------------------------------------
+// Location
+// ------------------------------------------------
+
+export type Location = z.infer<typeof Location>;
+export const Location = z.object({
+  name: LocationName.describe("The name of the location"),
+  description: z
+    .string()
+    .describe("A concise one-paragraph description of the location"),
+});
+
+// ------------------------------------------------
+// Npc
+// ------------------------------------------------
+
+export type Npc = z.infer<typeof Npc>;
+export const Npc = z.object({
+  name: NpcName.describe("The name of the NPC"),
+  description: z
+    .string()
+    .describe("A concise one-paragraph description of the NPC"),
+});
+
+export type NpcLocating = z.infer<typeof NpcLocating>;
+export const NpcLocating = z.object({
+  location: LocationName.describe("The location"),
+  description: z
+    .string()
+    .describe(
+      "A concise one-sentence description of exactly where in their location the NPC currently is",
+    ),
+});
+
+// ------------------------------------------------
+// Player
+// ------------------------------------------------
+
+export const Player = z.object({
+  name: z.string(),
+  description: z.string(),
+  inventory: z.array(ItemHolding),
+  location: LocationName,
+});
+
+// ------------------------------------------------
+// Action
+// ------------------------------------------------
+
+// player actions
+
+export type PlayerTakeItem = z.infer<typeof PlayerTakeItem>;
+export const PlayerTakeItem = z.object({
+  type: z.literal("PlayerTakeItem"),
+  item: ItemName.describe("The item that the player takes"),
+  description: z
+    .string()
+    .describe(
+      "A concise one-sentence description of how the player takes the item",
+    ),
+});
+
+export type PlayerDropItem = z.infer<typeof PlayerDropItem>;
+export const PlayerDropItem = z.object({
+  type: z.literal("PlayerDropItem"),
+  item: ItemName.describe("The item that the player drops"),
+  description: z
+    .string()
+    .describe(
+      "A concise one-sentence description of how the player drops the item",
+    ),
+});
+
+export const PlayerMove = z.object({
+  type: z.literal("PlayerMove"),
+  location: LocationName.describe("The location that the player moves to"),
+  description: z
+    .string()
+    .describe(
+      "A concise one-sentence description of how the player moves to the new location",
+    ),
+});
+
+// npc actions
+
+export type NpcMove = z.infer<typeof NpcMove>;
+export const NpcMove = z.object({
+  type: z.literal("NpcMove"),
+  location: LocationName.describe("The location that the NPC moves to"),
+  description: z
+    .string()
+    .describe(
+      "A concise one-sentence description of how the NPC moves to the new location",
+    ),
+});
+
+export type NpcTakeItem = z.infer<typeof NpcTakeItem>;
+export const NpcTakeItem = z.object({
+  type: z.literal("NpcTakeItem"),
+  item: ItemName.describe("The item that the NPC takes"),
+  description: z
+    .string()
+    .describe(
+      "A concise one-sentence description of how the NPC takes the item",
+    ),
+});
+
+export type NpcDropItem = z.infer<typeof NpcDropItem>;
+export const NpcDropItem = z.object({
+  type: z.literal("NpcDropItem"),
+  item: ItemName.describe("The item that the NPC drops"),
+  description: z
+    .string()
+    .describe("A concise one-sentence of how the NPC drops the item"),
+});
+
+// all actions
+
+export type Action = z.infer<typeof Action>;
+export const Action = z.union([
+  PlayerTakeItem,
+  PlayerDropItem,
+  PlayerMove,
+  NpcMove,
+  NpcTakeItem,
+  NpcDropItem,
+]);
+
+// ------------------------------------------------
+// Turn
+// ------------------------------------------------
+
+export const Turn = z.object({
+  prompt: z.string(),
+  actions: z.array(Action),
+  description: z.string(),
+});
+
+// ------------------------------------------------
+// GameState
+// ------------------------------------------------
+
+export type GameState = z.infer<typeof GameState>;
+export const GameState = z.object({
+  setting: z
+    .string()
+    .describe(
+      "A detailed multi-paragraph description of the game's world setting.",
+    ),
+  // player
+  player: Player,
+  // things
+  locations: z
+    .record(LocationName, Location)
+    .transform((x) => new Map(Object.entries(x)))
+    .describe("Associates each location's name with that location data"),
+  items: z
+    .record(ItemName, Item)
+    .transform((x) => new Map(Object.entries(x)))
+    .describe("Associates each item's name with that item's data"),
+  npcs: z
+    .record(NpcName, Npc)
+    .transform((x) => new Map(Object.entries(x)))
+    .describe("Associates each NPC's name with that NPC's data"),
+  // relationships
+  npcLocatings: z
+    .record(NpcName, NpcLocating)
+    .transform((x) => new Map(Object.entries(x)))
+    .describe(
+      "Associates each NPC's name with the name of the location where the NPC currently is",
+    ),
+  npcInventories: z
+    .record(NpcName, z.array(ItemHolding))
+    .transform((x) => new Map(Object.entries(x)))
+    .describe(
+      "Associates each NPC's name with an array of the names of the items that the NPC is holding in some way",
+    ),
+  locationItems: z
+    .record(LocationName, z.array(ItemPlacement))
+    .transform((x) => new Map(Object.entries(x)))
+    .describe(
+      "Associates each location's name with an array of the placements of items in that location",
+    ),
+  locationAdjecencies: z
+    .record(LocationName, z.array(LocationName))
+    .transform((x) => new Map(Object.entries(x)))
+    .describe(
+      "Associates each location's name with an array of the names of the locations that are adjacent to that location",
+    ),
+});
+
+// ------------------------------------------------
+// Game
+// ------------------------------------------------
 
 export type GameId = z.infer<typeof GameId>;
 export const GameId = z.string().uuid();
@@ -72,42 +256,6 @@ export const GameMetadata = z.object({
 export type Game = z.infer<typeof Game>;
 export const Game = z.object({
   metadata: GameMetadata,
-  // things
-  locations: z
-    .record(LocationName, Location)
-    .transform((x) => new Map(Object.entries(x)))
-    .describe("Associates each location's name with that location data"),
-  items: z
-    .record(ItemName, Item)
-    .transform((x) => new Map(Object.entries(x)))
-    .describe("Associates each item's name with that item's data"),
-  characters: z
-    .record(CharacterName, Character)
-    .transform((x) => new Map(Object.entries(x)))
-    .describe("Associates each character's name with that character's data"),
-  // relationships
-  characterLocations: z
-    .record(CharacterName, CharacterLocation)
-    .transform((x) => new Map(Object.entries(x)))
-    .describe(
-      "Associates each character's name with the name of the location where the character currently is.",
-    ),
-  characterInventories: z
-    .record(CharacterName, z.array(ItemHolding))
-    .transform((x) => new Map(Object.entries(x)))
-    .describe(
-      "Associates each character's name with an array of the names of the items that the character is holding in some way.",
-    ),
-  locationItems: z
-    .record(LocationName, z.array(ItemPlacement))
-    .transform((x) => new Map(Object.entries(x)))
-    .describe(
-      "Associates each location's name with an array of the placements of items in that location.",
-    ),
-  locationAdjecencies: z
-    .record(LocationName, z.array(LocationName))
-    .transform((x) => new Map(Object.entries(x)))
-    .describe(
-      "Associates each location's name with an array of the names of the locations that are adjacent to that location.",
-    ),
+  state: GameState,
+  turns: z.array(Turn),
 });
