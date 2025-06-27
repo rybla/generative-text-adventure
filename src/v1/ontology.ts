@@ -116,6 +116,11 @@ export type PlayerDropItem = z.infer<typeof PlayerDropItem>;
 export const PlayerDropItem = z.object({
   type: z.literal("PlayerDropItem"),
   item: ItemName.describe("The item that the player drops"),
+  itemPlacementDescription: z
+    .string()
+    .describe(
+      "A concise one-sentence description of how the item is placed in the location",
+    ),
   description: z
     .string()
     .describe(
@@ -138,7 +143,13 @@ export const PlayerMove = z.object({
 export type NpcMove = z.infer<typeof NpcMove>;
 export const NpcMove = z.object({
   type: z.literal("NpcMove"),
+  npc: NpcName,
   location: LocationName.describe("The location that the NPC moves to"),
+  npcLocatingDescription: z
+    .string()
+    .describe(
+      "A concise one-sentence description of where exactly the NPC is in the new location they move to.",
+    ),
   description: z
     .string()
     .describe(
@@ -149,7 +160,13 @@ export const NpcMove = z.object({
 export type NpcTakeItem = z.infer<typeof NpcTakeItem>;
 export const NpcTakeItem = z.object({
   type: z.literal("NpcTakeItem"),
+  npc: NpcName,
   item: ItemName.describe("The item that the NPC takes"),
+  itemHoldingDescription: z
+    .string()
+    .describe(
+      "A concise one-sentence description of how the NPC holds the item",
+    ),
   description: z
     .string()
     .describe(
@@ -160,7 +177,13 @@ export const NpcTakeItem = z.object({
 export type NpcDropItem = z.infer<typeof NpcDropItem>;
 export const NpcDropItem = z.object({
   type: z.literal("NpcDropItem"),
+  npc: NpcName,
   item: ItemName.describe("The item that the NPC drops"),
+  itemPlacementDescription: z
+    .string()
+    .describe(
+      "A concise one-sentence description of where in the location that the NPC drops the item.",
+    ),
   description: z
     .string()
     .describe("A concise one-sentence of how the NPC drops the item"),
@@ -192,6 +215,8 @@ export const Turn = z.object({
 // GameState
 // ------------------------------------------------
 
+// TODO: change organization so that there is a relation Item => Position (which can be player inventory, NPC inventory, or location inventory)
+// TODO: standardize names: dont use placement, holding, etc. make a word to use for all of them
 export type GameState = z.infer<typeof GameState>;
 export const GameState = z.object({
   setting: z

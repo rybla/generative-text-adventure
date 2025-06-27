@@ -6,14 +6,22 @@ import {
   Game,
   GameId,
   GameMetadata,
+  Item,
+  ItemHolding,
+  ItemName,
   ItemPlacement,
+  Location,
   LocationName,
+  Npc,
+  NpcLocating,
+  NpcName,
   PlayerDropItem,
   PlayerTakeItem,
 } from "./ontology";
 import * as fs from "fs/promises";
 import { DynamicToolAction, ToolAction } from "@genkit-ai/ai/tool";
 import { GeneratorOfIterable } from "../utility";
+import { P } from "node_modules/@genkit-ai/ai/lib/chunk-CT_4hHut";
 
 // constants
 
@@ -70,7 +78,7 @@ let game: Game = newGame();
 
 // prompt utilities
 
-const getGameDescription = (game: Game): Part => {
+const getGameDescriptionAsMessagePart = (game: Game): Part => {
   const adjacentLocations = game.state.locationAdjecencies.get(
     game.state.player.location,
   )!;
@@ -132,6 +140,13 @@ ${Array.from(game.state.npcLocatings.entries())
 
 // ai flows
 
+class ActionInterpretationError extends Error {
+  constructor() {
+    super();
+    this.name = "ActionInterpretationError";
+  }
+}
+
 const updateGame = ai.defineFlow(
   {
     name: "updateGame",
@@ -139,109 +154,283 @@ const updateGame = ai.defineFlow(
       game: Game,
       prompt: z.string(),
     }),
-    outputSchema: z.object({
-      game: Game,
-    }),
+    outputSchema: z.union([
+      z.object({
+        type: z.literal("ok"),
+        game: Game,
+      }),
+      z.object({
+        type: z.literal("error"),
+        reason: z.string(),
+      }),
+    ]),
   },
   async (input) => {
+    const errors: string[] = [];
+
     const prelude = `
 You are the game master for a unique and creative text adventure game.
       `.trim();
 
-    const initialDescription = await ai.generate({
+    const initialDescriptionResponse = await ai.generate({
       model: googleAI.model("gemini-2.5-flash-preview-04-17"),
       system: `
 ${prelude}
 
 The user will describe in natural langauge what they want to do next in the game. Your task is to consider the user's description in order to reply with a one-paragraph description of what the player does next and what happens in the game as an immediate consequence.
       `.trim(),
-      prompt: [getGameDescription(game), { text: `${input.prompt}` }],
+      prompt: [
+        getGameDescriptionAsMessagePart(game),
+        { text: `${input.prompt}` },
+      ],
     });
 
-    const ActionOutput = z.union([
-      z.object({
-        type: z.literal("success"),
-      }),
-      z.object({
-        type: z.literal("failure"),
-        reason: z.string(),
-      }),
-    ]);
-
-    const actions: Action[] = [];
-
     // interpret plan as sequence of Actions
-    const actionDescriptions = await ai.generate({
+    const actionsResponse = await ai.generate({
       model: googleAI.model("gemini-2.5-flash-preview-04-17"),
       system: `
 ${prelude}
 
 The user will provide a description of what the player does next and what happens in the game as an immediate consequence. Your task is to consider this natural-language description and interpret it as a sequence of structured actions.
         `.trim(),
-      tools: [
-        ai.dynamicTool(
-          {
-            name: "PlayerTakeItem",
-            description:
-              "The player takes an item from their current location into their inventory.",
-            inputSchema: PlayerTakeItem,
-            outputSchema: ActionOutput,
-          },
-          async (input) => {
-            const itemPlacementIsTargetItem = (
-              itemPlacement: ItemPlacement,
-            ): boolean => itemPlacement.item !== input.item;
-
-            // remove item from location
-            const locationItemPlacements = game.state.locationItems.get(
-              game.state.player.location,
-            )!;
-
-            if (
-              locationItemPlacements.find(itemPlacementIsTargetItem) ===
-              undefined
-            )
-              return {
-                type: "failure" as const,
-                reason: `There is no item with the name "${input.item}" in the player's current location.`,
-              };
-
-            game.state.locationItems.set(
-              game.state.player.location,
-              locationItemPlacements.filter(
-                (itemPlacement) => itemPlacement.item !== input.item,
-              ),
-            );
-
-            // add item to player inventory
-            game.state.player.inventory.push({
-              item: input.item,
-              description: input.holdingDescription,
-            });
-
-            // record action
-            actions.push(input);
-
-            return {
-              type: "success" as const,
-            };
-          },
-        ),
-        ai.dynamicTool({
-          name: "PlayerDropItem",
-          description:
-            "The player drops an item from their inventory into their current location.",
-          inputSchema: PlayerDropItem,
-          outputSchema: ActionOutput,
+      prompt: initialDescriptionResponse.text,
+      output: {
+        schema: z.object({
+          actions: z.array(Action),
         }),
-        // TODO: tools for other actions
-      ],
-      prompt: initialDescription.text,
+      },
     });
+    if (actionsResponse.output === null)
+      return {
+        type: "error" as const,
+        reason: "actionsResponse.output === null",
+      };
+
+    const actions = actionsResponse.output.actions;
+
+    // --------------------------------
+    // utilities
+    // --------------------------------
+
+    const getNpc = (npcName: NpcName): Npc => {
+      const npc = game.state.npcs.get(npcName);
+      if (npc === undefined) {
+        errors.push(`The NPC "${npcName}" does not exist.`);
+        throw new ActionInterpretationError();
+      }
+      return npc;
+    };
+
+    const getLocation = (locationName: LocationName): Location => {
+      const location = game.state.locations.get(locationName);
+      if (location === undefined) {
+        errors.push(`The location "${location}" does not exist.`);
+        throw new ActionInterpretationError();
+      }
+      return location;
+    };
+
+    const getItem = (itemName: ItemName): Item => {
+      const item = game.state.items.get(itemName);
+      if (item === undefined) {
+        errors.push(`The item "${itemName}" does not exist.`);
+        throw new ActionInterpretationError();
+      }
+      return item;
+    };
+
+    const setNpcLocation = (
+      npc: NpcName,
+      location: LocationName,
+      npcLocatingDescription: string,
+    ): void => {
+      getNpc(npc);
+      getLocation(location);
+      const npcLocating = game.state.npcLocatings.get(npc);
+      if (npcLocating === undefined) {
+        errors.push(`The NPC "${npc}" does not exist.`);
+        throw new ActionInterpretationError();
+      }
+      npcLocating.location = location;
+      npcLocating.description = npcLocatingDescription;
+    };
+
+    const addItemToPlayerInventory = (item: ItemName, description: string) => {
+      getItem(item);
+      game.state.player.inventory.push({ item, description });
+    };
+
+    const removeItemFromPlayerInventory = (item: ItemName): void => {
+      getItem(item);
+      const inventory = game.state.player.inventory;
+      const itemIndex = inventory.findIndex(
+        (itemHolding) => itemHolding.item === item,
+      );
+      if (itemIndex === -1) {
+        errors.push(
+          `The item "${item}" was not found in the player's inventory.`,
+        );
+        throw new ActionInterpretationError();
+      }
+
+      inventory.splice(itemIndex, 1);
+    };
+
+    const getNpcInventory = (npc: NpcName): ItemPlacement[] => {
+      getNpc(npc);
+      const inventory = game.state.npcInventories.get(npc);
+      if (inventory === undefined) {
+        errors.push(`The NPC "${npc}" does not exist.`);
+        throw new ActionInterpretationError();
+      }
+      return inventory;
+    };
+
+    const addItemToNpcInventory = (
+      npc: NpcName,
+      item: ItemName,
+      description: string,
+    ) => {
+      getNpc(npc);
+      getItem(item);
+      const inventory = getNpcInventory(npc);
+      inventory.push({ item, description });
+    };
+
+    const removeItemFromNpcInventory = (npc: NpcName, item: ItemName) => {
+      getNpc(npc);
+      getItem(item);
+      const inventory = getNpcInventory(npc);
+      const itemIndex = inventory.findIndex(
+        (itemPlacement) => itemPlacement.item === item,
+      );
+      if (itemIndex === -1) {
+        errors.push(
+          `The item "${item}" was not found in the inventory of NPC "${npc}".`,
+        );
+        throw new ActionInterpretationError();
+      }
+
+      inventory.splice(itemIndex, 1);
+    };
+
+    const getLocationItems = (location: LocationName): ItemPlacement[] => {
+      getLocation(location);
+      const itemPlacements = game.state.locationItems.get(location);
+      if (itemPlacements === undefined) {
+        errors.push(`The location "${location}" does not exist.`);
+        throw new ActionInterpretationError();
+      }
+      return itemPlacements;
+    };
+
+    const addItemToLocation = (
+      location: LocationName,
+      item: ItemName,
+      description: string,
+    ) => {
+      getLocation(location);
+      getItem(item);
+      const itemPlacements = getLocationItems(location);
+      itemPlacements.push({ item, description });
+    };
+
+    const removeItemFromLocation = (location: LocationName, item: ItemName) => {
+      getLocation(location);
+      getItem(item);
+      const itemPlacements = getLocationItems(location);
+      const itemIndex = itemPlacements.findIndex(
+        (itemPlacement) => itemPlacement.item === item,
+      );
+      if (itemIndex === -1) {
+        errors.push(
+          `The item "${item}" does not exist in the location "${location}".`,
+        );
+        throw new ActionInterpretationError();
+      }
+      itemPlacements.splice(itemIndex, 1);
+    };
+
+    const getNpcLocating = (npc: NpcName): NpcLocating => {
+      getNpc(npc);
+      const npcLocating = game.state.npcLocatings.get(npc);
+      if (npcLocating === undefined) {
+        errors.push(`The NPC "${npc}" does not exist.`);
+        throw new ActionInterpretationError();
+      }
+      return npcLocating;
+    };
+
+    // --------------------------------
     // execute actions
+    // --------------------------------
+
+    for (const action of actions) {
+      try {
+        switch (action.type) {
+          case "NpcDropItem": {
+            removeItemFromNpcInventory(action.npc, action.item);
+            addItemToLocation(
+              getNpcLocating(action.npc).location,
+              action.item,
+              action.itemPlacementDescription,
+            );
+            break;
+          }
+          case "NpcMove": {
+            setNpcLocation(
+              action.npc,
+              action.location,
+              action.npcLocatingDescription,
+            );
+            break;
+          }
+          case "NpcTakeItem": {
+            removeItemFromLocation(
+              getNpcLocating(action.npc).location,
+              action.item,
+            );
+            addItemToNpcInventory(
+              action.npc,
+              action.item,
+              action.itemHoldingDescription,
+            );
+            break;
+          }
+          case "PlayerDropItem": {
+            removeItemFromPlayerInventory(action.item);
+            addItemToLocation(
+              game.state.player.location,
+              action.item,
+              action.itemPlacementDescription,
+            );
+            break;
+          }
+          case "PlayerMove": {
+            getLocation(action.location);
+            game.state.player.location = action.location;
+            break;
+          }
+          case "PlayerTakeItem": {
+            removeItemFromLocation(game.state.player.location, action.item);
+            addItemToPlayerInventory(action.item, action.holdingDescription);
+            break;
+          }
+        }
+      } catch (error: unknown) {
+        if (error instanceof ActionInterpretationError) {
+          // errors will be accumulated to report at the end
+          continue;
+        } else {
+          throw error;
+        }
+      }
+    }
+
     // generate a summary of what happened and add the transcript of game
     // TODO
     return {
+      type: "ok" as const,
       game: input.game,
     };
   },
