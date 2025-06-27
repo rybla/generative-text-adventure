@@ -13,6 +13,7 @@ import {
 } from "./ontology";
 import * as fs from "fs/promises";
 import { DynamicToolAction, ToolAction } from "@genkit-ai/ai/tool";
+import { GeneratorOfIterable } from "../utility";
 
 // constants
 
@@ -74,14 +75,12 @@ const getGameDescription = (game: Game): Part => {
     game.state.player.location,
   )!;
 
-  const nearbyNpcs = game.state.npcLocatings
-    .entries()
-    .flatMap(([npc, npcLocating]) =>
+  const nearbyNpcs = Array.from(game.state.npcLocatings.entries()).flatMap(
+    ([npc, npcLocating]) =>
       npcLocating!.location === game.state.player.location
         ? [{ npc, npcLocating }]
         : [],
-    )
-    .toArray();
+  );
 
   const content = `
 # Game State
@@ -110,9 +109,8 @@ ${game.state.player.inventory
 ## NPCs
 
 The NPCs in the same location as the player are:
-${game.state.npcLocatings
-  .entries()
-  .flatMap(([npc, npcLocating]) =>
+${Array.from(game.state.npcLocatings.entries())
+  .map(([npc, npcLocating]) =>
     npcLocating!.location === game.state.player.location
       ? [
           `
@@ -122,7 +120,6 @@ ${game.state.npcLocatings
         ]
       : [],
   )
-  .toArray()
   .join("\n")}
 
 
