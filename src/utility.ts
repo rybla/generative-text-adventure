@@ -8,3 +8,5 @@ export const GeneratorOfIterable: <T>(iterator: Iterable<T>) => Generator<T> =
 // const x = GeneratorOfIterable(new Map<string, number>().entries());
 const x = Array.from(new Map<string, number>().values());
 // const x = [...new Map<string, number>().values()];
+
+export const deepcopy = <A>(x: A): A => JSON.parse(JSON.stringify(x));

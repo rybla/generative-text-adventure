@@ -34,8 +34,9 @@ export default function App() {
 
   // updates
 
-  const update_game = async () =>
+  const update_game = async () => {
     set_game(await (await fetch("/api/getGame", { method: "POST" })).json());
+  };
 
   const update_savedGameMetadatas = async () => {
     set_savedGameMetadatas(
