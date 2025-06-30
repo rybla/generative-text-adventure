@@ -1,28 +1,17 @@
 import * as fs from "fs/promises";
-import { z } from "zod";
+import { z } from "genkit";
 import { deepcopy, do_ } from "../utility";
-import {
-  GenerateActionInterpretationDescription,
-  GenerateActionPlanDescription,
-  GenerateActions,
-  GenerateItemsForPlace,
-  GeneratePlace,
-} from "./ai";
+import { GenerateActionPlanDescription, GenerateActions } from "./ai";
 import * as example1 from "./example/example1";
+import GameManager from "./GameManager";
 import index from "./index.html";
 import {
   Action,
   Game,
-  GameError,
   GameId,
-  GameManager,
   GameMetadata,
   GameStatus,
   GameStatusMessage,
-  Item,
-  Place,
-  PlaceConnection,
-  PlayerMove,
 } from "./ontology";
 
 // constants
@@ -37,7 +26,7 @@ const newGame = async (): Promise<Game> => {
     metadata: {
       id,
       name: `Game ${id}`,
-      creationDateTime: new Date(),
+      creationDateTime: new Date().toISOString(),
     },
     state: example1.state,
     turns: [],
@@ -65,12 +54,15 @@ function log(message: GameStatusMessage) {
   switch (message.type) {
     case "error": {
       console.error(message);
+      break;
     }
     case "info": {
       console.info(message);
+      break;
     }
     case "warning": {
       console.warn(message);
+      break;
     }
   }
 }
@@ -84,14 +76,11 @@ class UpdateGameError extends Error {
   }
 }
 
-async function updateGame(input: { prompt: string }): Promise<void> {
+async function promptGame(input: { prompt: string }): Promise<void> {
   const game_old: Game = deepcopy(gameManager.game);
 
   try {
-    const prelude = `
-You are the game master for a unique and creative text adventure game.
-      `.trim();
-
+    console.log("GenerateActionPlanDescription");
     const { actionPlanDescription } = await do_(async () => {
       const result = await GenerateActionPlanDescription({
         game: gameManager.game,
@@ -102,12 +91,14 @@ You are the game master for a unique and creative text adventure game.
       }
       return result.value;
     });
+    console.log(actionPlanDescription);
 
     // --------------------------------
     // generate actions
     // --------------------------------
 
     // interpret plan as sequence of Actions
+    console.log("GenerateActions");
     const { actions } = await do_(async () => {
       const result = await GenerateActions({
         game: gameManager.game,
@@ -119,119 +110,120 @@ You are the game master for a unique and creative text adventure game.
       }
       return result.value as { actions: Action[] };
     });
+    console.log(JSON.stringify(actions, null, 4));
 
-    // --------------------------------
-    // before interpreting actions
-    // --------------------------------
+    // // --------------------------------
+    // // before interpreting actions
+    // // --------------------------------
 
-    const playerMoveToNewPlace = actions.find(
-      (action): action is PlayerMove => {
-        switch (action.type) {
-          case "PlayerMove":
-            return gameManager.existsPlace(action.place);
-          default:
-            return false;
-        }
-      },
-    );
+    // const playerMoveToNewPlace = actions.find(
+    //   (action): action is PlayerMove => {
+    //     switch (action.type) {
+    //       case "PlayerMove":
+    //         return gameManager.existsPlace(action.place);
+    //       default:
+    //         return false;
+    //     }
+    //   },
+    // );
 
-    // if the player is moving to a new place, then generate that new place and some items to go in it
-    if (playerMoveToNewPlace !== undefined) {
-      await do_(async () => {
-        const result = await GeneratePlace({
-          game: gameManager.game,
-          placeName: playerMoveToNewPlace.place,
-        });
+    // // if the player is moving to a new place, then generate that new place and some items to go in it
+    // if (playerMoveToNewPlace !== undefined) {
+    //   await do_(async () => {
+    //     const result = await GeneratePlace({
+    //       game: gameManager.game,
+    //       placeName: playerMoveToNewPlace.place,
+    //     });
 
-        if (result.type === "error") {
-          result.value.forEach((content) => log({ type: "error", content }));
-          throw new UpdateGameError();
-        }
+    //     if (result.type === "error") {
+    //       result.value.forEach((content) => log({ type: "error", content }));
+    //       throw new UpdateGameError();
+    //     }
 
-        const place = result.value.place as Place;
+    //     const place = result.value.place as Place;
 
-        gameManager.createPlace(
-          place,
-          result.value.connections as PlaceConnection[],
-        );
-      });
+    //     gameManager.createPlace(
+    //       place,
+    //       result.value.connections as PlaceConnection[],
+    //     );
+    //   });
 
-      await do_(async () => {
-        const result = await GenerateItemsForPlace({
-          game: gameManager.game,
-          place: playerMoveToNewPlace.place,
-        });
+    //   await do_(async () => {
+    //     const result = await GenerateItemsForPlace({
+    //       game: gameManager.game,
+    //       place: playerMoveToNewPlace.place,
+    //     });
 
-        if (result.type === "error") {
-          result.value.forEach((content) => log({ type: "error", content }));
-          throw new UpdateGameError();
-        }
+    //     if (result.type === "error") {
+    //       result.value.forEach((content) => log({ type: "error", content }));
+    //       throw new UpdateGameError();
+    //     }
 
-        const itemsAndLocations = result.value.itemsAndLocations as {
-          item: Item;
-          description: string;
-        }[];
+    //     const itemsAndLocations = result.value.itemsAndLocations as {
+    //       item: Item;
+    //       description: string;
+    //     }[];
 
-        for (const { item, description } of itemsAndLocations) {
-          gameManager.createItem(item, {
-            type: "place",
-            item: item.name,
-            place: playerMoveToNewPlace.place,
-            description,
-          });
-        }
-      });
-    }
+    //     for (const { item, description } of itemsAndLocations) {
+    //       gameManager.createItem(item, {
+    //         type: "place",
+    //         item: item.name,
+    //         place: playerMoveToNewPlace.place,
+    //         description,
+    //       });
+    //     }
+    //   });
+    // }
 
-    // --------------------------------
-    // interpret actions
-    // --------------------------------
+    // // --------------------------------
+    // // interpret actions
+    // // --------------------------------
 
-    let errorDuringInterpretingActions = false;
+    // let errorDuringInterpretingActions = false;
 
-    for (const action of actions) {
-      try {
-        gameManager.interpretAction(action);
-      } catch (error: unknown) {
-        if (error instanceof GameError) {
-          errorDuringInterpretingActions = true;
-          log({ type: "error", content: error.message });
-          continue;
-        } else {
-          throw error;
-        }
-      }
-    }
+    // for (const action of actions) {
+    //   try {
+    //     gameManager.interpretAction(action);
+    //   } catch (error: unknown) {
+    //     if (error instanceof GameError) {
+    //       errorDuringInterpretingActions = true;
+    //       log({ type: "error", content: error.message });
+    //       continue;
+    //     } else {
+    //       throw error;
+    //     }
+    //   }
+    // }
 
-    if (errorDuringInterpretingActions) {
-      gameManager.game = game_old;
-      throw new UpdateGameError();
-    }
+    // if (errorDuringInterpretingActions) {
+    //   gameManager.game = game_old;
+    //   throw new UpdateGameError();
+    // }
 
-    // --------------------------------
-    // after interpreting actions
-    // --------------------------------
+    // // --------------------------------
+    // // after interpreting actions
+    // // --------------------------------
 
-    // generate a summary of what happened and add the transcript of game
-    const { actionInterpretationDescription } = await do_(async () => {
-      const result = await GenerateActionInterpretationDescription({
-        game: gameManager.game,
-        actions,
-      });
+    // // generate a summary of what happened and add the transcript of game
+    // const { actionInterpretationDescription } = await do_(async () => {
+    //   const result = await GenerateActionInterpretationDescription({
+    //     game: gameManager.game,
+    //     actions,
+    //   });
 
-      if (result.type === "error") {
-        result.value.forEach((content) => log({ type: "error", content }));
-        throw new UpdateGameError();
-      }
+    //   if (result.type === "error") {
+    //     result.value.forEach((content) => log({ type: "error", content }));
+    //     throw new UpdateGameError();
+    //   }
 
-      return result.value;
-    });
+    //   return result.value;
+    // });
 
-    gameManager.addTurn({
-      prompt: input.prompt,
-      actions,
-      description: actionInterpretationDescription,
-    });
+    // gameManager.addTurn({
+    //   prompt: input.prompt,
+    //   actions,
+    //   description: actionInterpretationDescription,
+    // });
   } catch (error: unknown) {
     if (error instanceof UpdateGameError) {
       log({
@@ -288,10 +280,10 @@ const server = Bun.serve({
       gameManager.game = await loadGame(input.id);
       return new Response();
     },
-    "/api/prompt": async (req) => {
+    "/api/promptGame": async (req) => {
       console.log(`${req.method} ${req.url}`);
       const data = z.object({ prompt: z.string() }).parse(await req.json());
-      await updateGame({ prompt: data.prompt });
+      await promptGame({ prompt: data.prompt });
       return new Response();
     },
     "/api/getGameStatus": async (req) => {

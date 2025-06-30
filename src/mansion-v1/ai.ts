@@ -1,9 +1,9 @@
 import googleAI from "@genkit-ai/googleai";
 import { genkit, z } from "genkit";
+import GameManager from "./GameManager";
 import {
   Action,
   Game,
-  GameManager,
   Item,
   ItemName,
   Place,
@@ -11,6 +11,7 @@ import {
   PlaceName,
   Result,
 } from "./ontology";
+
 // -----------------------------------------------------------------------------
 // genkit
 // -----------------------------------------------------------------------------
@@ -67,7 +68,7 @@ The user will describe in natural langauge what they want to do next in the game
         prompt: [
           {
             media: {
-              url: `data:text/markdown;base64,${Buffer.from(gameManager.description, "utf8").toString("base64")}`,
+              url: `data:text/markdown;base64,${Buffer.from(gameManager.getGameDescription(), "utf8").toString("base64")}`,
             },
           },
           { text: `${prompt}` },

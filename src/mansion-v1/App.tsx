@@ -1,13 +1,21 @@
 import { do_ } from "@/utility";
-import { useEffect, useState } from "react";
-import { Game, GameMetadata, GameStatus } from "./ontology";
+import { KeyboardEventHandler, useEffect, useRef, useState } from "react";
+import "./App.css";
+import {
+  getCurrentPlace,
+  getCurrentPlaceItems,
+  getCurrentPlayerLocation,
+  getInventory,
+  getItem,
+} from "./GameManager";
+import type { Game, GameMetadata, GameStatus } from "./ontology";
 
 export default function App() {
   const [game, set_game] = useState<Game | undefined>(undefined);
-  // const gameManager = new GameManager(game as Game);
   const [gameStatus, set_gameStatus] = useState<GameStatus | undefined>(
     undefined,
   );
+  const consoleInputRef = useRef<HTMLTextAreaElement>(null);
 
   const [savedGameMetadatas, set_savedGameMetadatas] = useState<GameMetadata[]>(
     [],
@@ -36,21 +44,17 @@ export default function App() {
     await update_game();
   };
 
-  // updates
-
   const update_game = async () => {
-    const game = Game.parse(
-      await (await fetch("/api/getGame", { method: "POST" })).json(),
-    );
-    console.log(`game:\n${JSON.stringify(game, null, 4)}`);
-    // console.log(`game === undefined: ${game === undefined}`);
-    // console.log(`game === null: ${game === null}`);
+    const game: Game = await (
+      await fetch("/api/getGame", { method: "POST" })
+    ).json();
+    // console.log(`game:\n${JSON.stringify(game, null, 4)}`);
     set_game(game);
 
-    const gameStatus = GameStatus.parse(
-      await (await fetch("/api/getGameStatus", { method: "POST" })).json(),
-    );
-    console.log(`gameStatus:\n${JSON.stringify(gameStatus, null, 4)}`);
+    const gameStatus: GameStatus = await (
+      await fetch("/api/getGameStatus", { method: "POST" })
+    ).json();
+    // console.log(`gameStatus:\n${JSON.stringify(gameStatus, null, 4)}`);
     set_gameStatus(gameStatus);
   };
 
@@ -62,6 +66,29 @@ export default function App() {
         })
       ).json(),
     );
+  };
+
+  const promptGame = async (prompt: string) => {
+    await fetch("/api/promptGame", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ prompt }),
+    });
+
+    await update_game();
+  };
+
+  // event handlers
+
+  const consoleInput_onKeyDown: KeyboardEventHandler<
+    HTMLTextAreaElement
+  > = async (event) => {
+    // console.log(event.key);
+    if (event.key === "Enter") {
+      await promptGame(event.currentTarget.value.trim());
+    }
   };
 
   // effects
@@ -91,8 +118,8 @@ export default function App() {
 
   return (
     <div className="App">
-      <div>App</div>
-      <div>
+      <div className="section-label">generative-text-adventure</div>
+      <div className="toolbar">
         <button onClick={async () => await newGame()}>New Game</button>
         <button onClick={async () => await saveGame()}>Save Game</button>
         <div>
@@ -107,35 +134,108 @@ export default function App() {
       </div>
       {game !== undefined ? (
         <div className="Game">
-          <div className="name">{game.metadata.name}</div>
-          <div className="creationDateTime">
-            {renderDateTime(new Date(game.metadata.creationDateTime))}
-          </div>
-          <div className="player">
-            <div className="name">{game.state.player.name}</div>
-            <div className="description">{game.state.player.description}</div>
-          </div>
-          <div className="playerLocation">
-            <div className="placeName">{game.state.playerLocation.place}</div>
-            <div className="placeDescription">
-              {
-                game.state.places!.get(game.state.playerLocation.place)!
-                  .description
-              }
+          <div className="section-label">Game</div>
+          <div className="GameMetadata">
+            <div className="section-label">Metadata</div>
+            <div className="name">{game.metadata.name}</div>
+            <div className="creationDateTime">
+              {renderDateTime(new Date(game.metadata.creationDateTime))}
             </div>
-            <div className="playerLocationDescription">
-              {game.state.playerLocation.description}
+          </div>
+          <div className="GameState">
+            <div className="player">
+              <div className="section-label">Player</div>
+              <div className="name">
+                <span className="value-label">Name:</span>{" "}
+                {game.state.player.name}
+              </div>
+              <div className="description">
+                <span className="value-label">Description:</span>{" "}
+                {game.state.player.description}
+              </div>
+              <div className="inventory">
+                <span className="value-label">Inventory:</span>{" "}
+                <ul>
+                  {getInventory(game).map((itemLocation, i) => (
+                    <li key={i}>
+                      <div className="Item">
+                        <div className="name">
+                          <span className="value-label">Name:</span>{" "}
+                          {itemLocation.item}
+                        </div>
+                        <div className="description">
+                          {getItem(game, itemLocation.item).description}
+                        </div>
+                        <div className="itemLocationDescription">
+                          {itemLocation.description}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
+            <div className="playerLocation">
+              <div className="section-label">Current Location</div>
+              <div className="placeName">
+                <span className="value-label">Name:</span>{" "}
+                {getCurrentPlace(game).name}
+              </div>
+              <span className="value-label">Description:</span>{" "}
+              <div className="placeDescription">
+                {getCurrentPlayerLocation(game).description}
+              </div>
+              <div className="playerLocationDescription">
+                {getCurrentPlace(game).description}
+              </div>
+              <div className="items">
+                <span className="value-label">Items:</span>{" "}
+                <ul>
+                  {getCurrentPlaceItems(game).map((itemLocation, i) => (
+                    <li key={i}>
+                      <div className="ItemLocation">
+                        <div className="name">{itemLocation.item}</div>
+                        <div className="description">
+                          {itemLocation.description}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div className="turns">
+            <div className="section-label">Turns</div>
+            {game.turns.map((turn, i) => (
+              <div key={i} className="Turn">
+                <div className="prompt">{turn.prompt}</div>
+                <div className="description">{turn.description}</div>
+              </div>
+            ))}
           </div>
         </div>
       ) : (
         <></>
       )}
+
+      <div className="Console">
+        <div className="section-label">Console</div>
+        <textarea
+          ref={consoleInputRef}
+          id="consoleInput"
+          onKeyDown={consoleInput_onKeyDown}
+        />
+      </div>
+
       {gameStatus !== undefined ? (
         <div className="GameStatus">
+          <div className="section-label">Status</div>
           <div className="messages">
-            {gameStatus.messages.map((message) => (
-              <div className={`message ${message.type}`}>{message.content}</div>
+            {gameStatus.messages.map((message, i) => (
+              <div className={`message ${message.type}`} key={i}>
+                {message.content}
+              </div>
             ))}
           </div>
         </div>

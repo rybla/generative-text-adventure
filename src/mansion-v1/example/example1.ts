@@ -10,58 +10,60 @@ const WelcomeNote: Item = {
   description: `Welcome to the Shifting Manor! This place is not haunted by ghosts, but by possibilities. Each door opened is a gamble, leading not just to another room, but to another reality—a library where books breathe and exhale stories as clouds of colored dust, an observatory where one can pluck stars from the velvet sky like ripe fruit, a kitchen where pots and pans simmer with recipes for emotions, or a simple hallway where the portraits age in reverse. The very air hums with a strange, static-like energy, a sense that the house itself is a puzzle box, and the player is the key, the trespasser, and the prize all at once. The player's goal is not to escape, but to understand; to navigate the illogical and shifting corridors to find the "Still Room," the one place at the heart of the chaos that is rumored to never change.`,
 };
 
+const Flashlight: Item = {
+  name: ItemName.parse("Flashlight"),
+  description: `A simple flashlight, but one that illuminates the dark corners of the Shifting Manor. It's not just a tool, but a companion, a reminder that even in the most chaotic of places, there is always a way forward.`,
+};
+
 export const state: GameState = {
   setting: `The Shifting Manor is a building that rearranges its own blueprint according to забытые (zabytiye: "forgotten") whims and half-remembered dreams. The setting is not a place haunted by ghosts, but by possibilities. Each door opened is a gamble, leading not just to another room, but to another reality—a library where books breathe and exhale stories as clouds of colored dust, an observatory where one can pluck stars from the velvet sky like ripe fruit, a kitchen where pots and pans simmer with recipes for emotions, or a simple hallway where the portraits age in reverse. The very air hums with a strange, static-like energy, a sense that the house itself is a puzzle box, and the player is the key, the trespasser, and the prize all at once. The player's goal is not to escape, but to understand; to navigate the illogical and shifting corridors to find the "Still Room," the one place at the heart of the chaos that is rumored to never change.`,
   player: {
     name: `Corvin`,
     description: `Corvin is not a treasure hunter or a ghost seeker, but a cartographer of the forgotten, a man whose own memories feel as disjointed and rearranged as the Manor's corridors. He arrived at the threshold of the Shifting Manor not by accident, but by a pull—a quiet, gnawing curiosity about the places where logic frays. He is a man of quiet observation, with a worn leather-bound journal and a steady hand, treating each new impossible reality not as a threat, but as a verse in the Manor's strange, incoherent poem. His movements are patient, his gaze analytical, driven by the belief that if he can learn the rhythm of the house's chaotic heart, he might not only find the legendary Still Room, but also piece together the fragmented echoes of his own past that led him there.`,
   },
-  places: new Map([[MainFoyer.name, MainFoyer]]),
-  items: new Map([[WelcomeNote.name, WelcomeNote]]),
+  places: [MainFoyer],
+  items: [WelcomeNote, Flashlight],
   playerLocation: {
     place: MainFoyer.name,
-    description: `Corvin is standing just inside the enterance of the Foyer.`,
+    description: `Corvin is standing just inside the entrance of the Foyer.`,
   },
-  itemLocations: new Map([
-    [
-      WelcomeNote.name,
-      {
-        type: "place",
-        item: WelcomeNote.name,
-        place: MainFoyer.name,
-        description:
-          "The welcome note is placed on an old, round oak table in the center of the foyer.",
-      },
-    ],
-  ]),
-  placeConnections: new Map([
-    [
-      MainFoyer.name,
-      [
-        {
-          place1: MainFoyer.name,
-          place2: PlaceName.parse("Chester's Library"),
-          description:
-            "A large pair of doors connects the Main Foyer to Chester's Library.",
-        },
-        {
-          place1: MainFoyer.name,
-          place2: PlaceName.parse("Starlight Observatory"),
-          description:
-            "A small winding passageway connects the Main Foyer and the Starlight Observatory.",
-        },
-        {
-          place1: MainFoyer.name,
-          place2: PlaceName.parse("Central Kitchen"),
-          description:
-            "A metal doorway connects the Main Foyer and the Central Kitchen.",
-        },
-        {
-          place1: MainFoyer.name,
-          place2: PlaceName.parse("Grand Hallway"),
-          description: "The Foyer connects directly to the Grand Hallway.",
-        },
-      ],
-    ],
-  ]),
+  itemLocations: [
+    {
+      type: "place",
+      item: WelcomeNote.name,
+      place: MainFoyer.name,
+      description:
+        "The welcome note is placed on an old, round oak table in the center of the foyer.",
+    },
+    {
+      type: "inventory",
+      item: Flashlight.name,
+      description: "The flashlight is in Corvin's pocket.",
+    },
+  ],
+  placeConnections: [
+    {
+      place1: MainFoyer.name,
+      place2: PlaceName.parse("Chester's Library"),
+      description:
+        "A large pair of doors connects the Main Foyer to Chester's Library.",
+    },
+    {
+      place1: MainFoyer.name,
+      place2: PlaceName.parse("Starlight Observatory"),
+      description:
+        "A small winding passageway connects the Main Foyer and the Starlight Observatory.",
+    },
+    {
+      place1: MainFoyer.name,
+      place2: PlaceName.parse("Central Kitchen"),
+      description:
+        "A metal doorway connects the Main Foyer and the Central Kitchen.",
+    },
+    {
+      place1: MainFoyer.name,
+      place2: PlaceName.parse("Grand Hallway"),
+      description: "The Foyer connects directly to the Grand Hallway.",
+    },
+  ],
 };
