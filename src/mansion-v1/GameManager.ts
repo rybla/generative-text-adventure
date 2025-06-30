@@ -5,9 +5,9 @@ import type {
   Item,
   ItemLocation,
   ItemName,
-  Place,
-  PlaceConnection,
-  PlaceName,
+  Room,
+  RoomConnection,
+  RoomName,
   PlayerLocation,
   Turn,
 } from "./ontology";
@@ -19,20 +19,20 @@ export default class GameManager {
     return getInventory(this.game);
   }
 
-  getCurrentPlaceConnections() {
-    return getCurrentPlaceConnections(this.game);
+  getCurrentRoomConnections() {
+    return getCurrentRoomConnections(this.game);
   }
 
-  getCurrentPlace() {
-    return getCurrentPlace(this.game);
+  getCurrentRoom() {
+    return getCurrentRoom(this.game);
   }
 
   getCurrentPlayerLocation() {
     return getCurrentPlayerLocation(this.game);
   }
 
-  getCurrentPlaceItems() {
-    return getCurrentPlaceItems(this.game);
+  getCurrentRoomItems() {
+    return getCurrentRoomItems(this.game);
   }
 
   getItem(item: ItemName) {
@@ -43,16 +43,16 @@ export default class GameManager {
     return getItemLocation(this.game, item);
   }
 
-  getPlace(place: PlaceName) {
-    return getPlace(this.game, place);
+  getRoom(room: RoomName) {
+    return getRoom(this.game, room);
   }
 
-  getPlaceConnections(place: PlaceName) {
-    return getPlaceConnections(this.game, place);
+  getRoomConnections(room: RoomName) {
+    return getRoomConnections(this.game, room);
   }
 
-  existsPlace(place: PlaceName) {
-    return existsPlace(this.game, place);
+  existsRoom(room: RoomName) {
+    return existsRoom(this.game, room);
   }
 
   existsItem(item: ItemName) {
@@ -67,11 +67,11 @@ export default class GameManager {
     this.game.turns.push(turn);
   }
 
-  createPlace(place: Place, placeConnections: PlaceConnection[]) {
-    if (this.existsPlace(place.name))
-      throw new GameError(`The place "${place.name}" already exists.`);
-    this.game.state.places.push(place);
-    this.game.state.placeConnections.push(...placeConnections);
+  createRoom(room: Room, roomConnections: RoomConnection[]) {
+    if (this.existsRoom(room.name))
+      throw new GameError(`The room "${room.name}" already exists.`);
+    this.game.state.rooms.push(room);
+    this.game.state.roomConnections.push(...roomConnections);
   }
 
   createItem(item: Item, itemLocation: ItemLocation) {
@@ -82,7 +82,7 @@ export default class GameManager {
   }
 
   setPlayerLocation(playerLocation: PlayerLocation) {
-    existsPlace(this.game, playerLocation.place, true);
+    existsRoom(this.game, playerLocation.room, true);
     this.game.state.playerLocation = playerLocation;
   }
 
@@ -98,29 +98,35 @@ export default class GameManager {
         }
         break;
       }
-      case "place": {
-        existsPlace(this.game, itemLocation.place, true);
+      case "room": {
+        existsRoom(this.game, itemLocation.room, true);
         if (
-          itemLocation_old.type === "place" &&
-          itemLocation_old.place === itemLocation.place
+          itemLocation_old.type === "room" &&
+          itemLocation_old.room === itemLocation.room
         )
           throw new GameError(
-            `The item "${item}" is already in the place "${itemLocation.place}".`,
+            `The item "${item}" is already in the room "${itemLocation.room}".`,
           );
         break;
       }
     }
-    this.game.state.itemLocations.push(itemLocation);
+    this.game.state.itemLocations.splice(
+      this.game.state.itemLocations.findIndex(
+        ({ item: item_ }) => item_ === item,
+      ),
+      1,
+      itemLocation,
+    );
   }
 
   interpretAction(action: Action) {
     switch (action.type) {
       case "PlayerDropItem": {
         this.setItemLocation(action.item, {
-          type: "place",
+          type: "room",
           item: action.item,
-          place: this.game.state.playerLocation.place,
-          description: action.descriptionOfItemInPlace,
+          room: this.game.state.playerLocation.room,
+          description: action.descriptionOfItemInRoom,
         });
         break;
       }
@@ -134,9 +140,13 @@ export default class GameManager {
       }
       case "PlayerMove": {
         this.setPlayerLocation({
-          place: action.place,
-          description: action.descriptionOfPlayerInPlace,
+          room: action.room,
+          description: action.descriptionOfPlayerInRoom,
         });
+        break;
+      }
+      case "PlayerInspect": {
+        // IDEA: add to an array of thoughts that go away over time?
         break;
       }
     }
@@ -153,23 +163,23 @@ export function getInventory(game: Game) {
   });
 }
 
-export function getCurrentPlaceConnections(game: Game) {
-  return getPlaceConnections(game, game.state.playerLocation.place);
+export function getCurrentRoomConnections(game: Game) {
+  return getRoomConnections(game, game.state.playerLocation.room);
 }
 
-export function getCurrentPlace(game: Game) {
-  return getPlace(game, game.state.playerLocation.place);
+export function getCurrentRoom(game: Game) {
+  return getRoom(game, game.state.playerLocation.room);
 }
 
 export function getCurrentPlayerLocation(game: Game) {
   return game.state.playerLocation;
 }
 
-export function getCurrentPlaceItems(game: Game) {
+export function getCurrentRoomItems(game: Game) {
   return game.state.itemLocations.flatMap((itemLocation) => {
     if (
-      itemLocation.type === "place" &&
-      itemLocation.place === getCurrentPlace(game).name
+      itemLocation.type === "room" &&
+      itemLocation.room === getCurrentRoom(game).name
     ) {
       return [itemLocation];
     } else {
@@ -188,32 +198,31 @@ export function getItemLocation(game: Game, item: ItemName) {
   return game.state.itemLocations.find(({ item: item_ }) => item_ === item)!;
 }
 
-export function getPlace(game: Game, place: PlaceName) {
-  existsPlace(game, place, true);
-  return game.state.places.find(({ name: place_ }) => place_ === place)!;
+export function getRoom(game: Game, room: RoomName) {
+  existsRoom(game, room, true);
+  return game.state.rooms.find(({ name: room_ }) => room_ === room)!;
 }
 
-export function getPlaceConnections(game: Game, place: PlaceName) {
-  existsPlace(game, place, true);
-  return game.state.placeConnections.filter(
-    ({ place1, place2 }) => place1 === place || place2 === place,
+export function getRoomConnections(game: Game, room: RoomName) {
+  existsRoom(game, room, true);
+  return game.state.roomConnections.filter(
+    ({ room1, room2 }) => room1 === room || room2 === room,
   )!;
 }
 
-export function existsPlace(game: Game, place: PlaceName, assert = false) {
+export function existsRoom(game: Game, room: RoomName, assert = false) {
   if (
-    game.state.places.find(({ name: place_ }) => place_ === place) === undefined
+    game.state.rooms.find(({ name: room_ }) => room_ === room) === undefined
   ) {
-    if (assert) throw new GameError(`The place "${place}" does not exist.`);
+    if (assert) throw new GameError(`The room "${room}" does not exist.`);
     else return false;
   }
   if (
-    game.state.placeConnections.find(
-      (connection) =>
-        connection.place1 === place || connection.place2 === place,
+    game.state.roomConnections.find(
+      (connection) => connection.room1 === room || connection.room2 === room,
     ) === undefined
   )
-    throw new BugError(`The place "${place}" is not in \`placeConnections\`.`);
+    throw new BugError(`The room "${room}" is not in \`roomConnections\`.`);
 
   return true;
 }
@@ -261,12 +270,12 @@ ${getInventory(game)
   .join("\n")
   .trim()}
 
-## Current Place
+## Current Room
 
-The player is currently in "${game.state.playerLocation.place}": ${game.state.playerLocation.description}
+The player is currently in "${game.state.playerLocation.room}": ${game.state.playerLocation.description}
 
-The following items are in this place:
-${getCurrentPlaceItems(game)
+The following items are in this room:
+${getCurrentRoomItems(game)
   .map((location) =>
     `
   - "${location.item}": ${location.description}
@@ -276,11 +285,11 @@ ${getCurrentPlaceItems(game)
   .join("\n")
   .trim()}
 
-## Connected Places
+## Connected Rooms
 
-The player's current place is connected to the following places:
-${getCurrentPlaceConnections(game)
-  .map((connection) => `${connection.place2}: ${connection.description}`)
+The player's current room is connected to the following rooms:
+${getCurrentRoomConnections(game)
+  .map((connection) => `${connection.room2}: ${connection.description}`)
   .join("\n")}
 
 `.trim();

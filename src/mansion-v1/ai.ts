@@ -3,14 +3,17 @@ import { genkit, z } from "genkit";
 import GameManager from "./GameManager";
 import {
   Action,
+  describeAction,
   Game,
   Item,
   ItemName,
-  Place,
-  PlaceConnection,
-  PlaceName,
+  Room,
+  RoomConnection,
+  RoomName,
   Result,
+  Action_specialized,
 } from "./ontology";
+import { toJsonSchema } from "genkit/schema";
 
 // -----------------------------------------------------------------------------
 // genkit
@@ -18,20 +21,30 @@ import {
 
 export const ai = genkit({ plugins: [googleAI()] });
 
+const model_speed = googleAI.model("gemini-2.5-flash-lite-preview-06-17");
+const model_power = googleAI.model("gemini-2.5-pro");
+
 // -----------------------------------------------------------------------------
 // prelude
 // -----------------------------------------------------------------------------
 
 const mkPrelude = (game: Game) =>
+  //   `
+  // You are the game master for a unique and creative text adventure game.
+  // For all of your tasks, make sure to follow these rules:
+  // - ALWAYS refer to the items and rooms by their exact full names when using it as an output field's value.
+  //   - NEVER use articles like "the" before the name.
+  //   - NEVER wrap names in quotes.
+  // - The player is ONLY allowed to take items that are explicitly listed in their current location.
+  // - The player is ONLY allowed to drop items that are explicitly listed in their inventory.
+  // - The player is only allowed to move to other rooms that are explicitly listed as connected to their current room.
+  // `.trim();
   `
-You are the game master for a unique and creative text adventure game.
-For all of your tasks, make sure to follow these rules:
-- ALWAYS refer to the items, places, etc. by their full exact names when using it as an output field's value.
-  - NEVER use articles like "the" before the name.
-  - NEVER wrap names in quotes.
-- The player is ONLY allowed to take or drop items that are explicitly listed in their inventory or in their current location.
-- The player is only allowed to move to other places that are explicitly listed as connected to their current location.
-    `.trim();
+You are the game master for a unique and creative text adventure game. Keep the following tips in mind:
+  - Be creative!
+  - Play along with the user, but also make sure to make the game play out coherently with according the the game's setting.
+  - All of your writing should be in present tense and 3rd person perspecitve.
+`.trim();
 
 // -----------------------------------------------------------------------------
 // GenerateActionPlanDescription
@@ -66,11 +79,13 @@ export const GenerateActionPlanDescription = ai.defineFlow(
       const gameManager = new GameManager(input.game);
 
       const response = await ai.generate({
-        model: googleAI.model("gemini-2.5-flash"),
+        model: model_speed,
         system: `
 ${mkPrelude(input.game)}
 
 The user will attach a file that describes the current status of the game and then describe in natural language what they want to do next in the game. Your task is to consider the user's description in order to reply with a one-paragraph description of what the player does next and what happens in the game as an immediate consequence.
+
+It is critical that you ONLY describe the IMMEDIATE next thing that the player does and its IMMEDIATE consequences. Don't play out the narrative too much, since the player should get a chance to decide how to response to things as they happen.
         `.trim(),
         prompt: [
           {
@@ -119,8 +134,12 @@ export const GenerateActions = ai.defineFlow(
   },
   async (input): Promise<GenerateActions_Output> => {
     try {
+      const Action_schema = Action_specialized(input.game);
+      // console.log(
+      //   JSON.stringify(toJsonSchema({ schema: Action_schema }), null, 4),
+      // );
       const response = await ai.generate({
-        model: googleAI.model("gemini-2.5-flash"),
+        model: model_speed,
         system: `
 ${mkPrelude(input.game)}
 
@@ -129,7 +148,7 @@ The user will provide a description of what the player does next and what happen
         prompt: input.actionPlanDescription,
         output: {
           schema: z.object({
-            actions: z.array(Action),
+            actions: z.array(Action_schema),
           }),
         },
       });
@@ -179,7 +198,7 @@ export const GenerateActionInterpretationDescription = ai.defineFlow(
   async (input): Promise<GenerateActionInterpretationDescription_Output> => {
     try {
       const response = await ai.generate({
-        model: googleAI.model("gemini-2.5-flash"),
+        model: model_speed,
         system: `
 ${mkPrelude(input.game)}
 
@@ -196,7 +215,7 @@ Actions I actually took this turn:
 ${input.actions
   .map(
     (action) => `
-    - ${action.type}: ${action.description}`,
+    - ${action.type}: ${describeAction(action)}`,
   )
   .join("\n")}`.trim(),
       });
@@ -216,56 +235,56 @@ ${input.actions
 );
 
 // -----------------------------------------------------------------------------
-// GeneratePlace
+// GenerateRoom
 // -----------------------------------------------------------------------------
 
-export type GeneratePlace_Input = z.infer<typeof GeneratePlace_Input>;
-export const GeneratePlace_Input = z.object({
+export type GenerateRoom_Input = z.infer<typeof GenerateRoom_Input>;
+export const GenerateRoom_Input = z.object({
   game: Game,
-  placeName: PlaceName,
+  roomName: RoomName,
 });
 
-export type GeneratePlace_Output = z.infer<typeof GeneratePlace_Output>;
-export const GeneratePlace_Output = Result(
+export type GenerateRoom_Output = z.infer<typeof GenerateRoom_Output>;
+export const GenerateRoom_Output = Result(
   z.array(z.string()),
   z.object({
-    place: Place,
-    connections: z.array(PlaceConnection),
+    room: Room,
+    connections: z.array(RoomConnection),
   }),
 );
 
-export const GeneratePlace = ai.defineFlow(
+export const GenerateRoom = ai.defineFlow(
   {
-    name: "GeneratePlace",
-    inputSchema: GeneratePlace_Input,
-    outputSchema: GeneratePlace_Output,
+    name: "GenerateRoom",
+    inputSchema: GenerateRoom_Input,
+    outputSchema: GenerateRoom_Output,
   },
-  async (input): Promise<GeneratePlace_Output> => {
+  async (input): Promise<GenerateRoom_Output> => {
     try {
       const response = await ai.generate({
-        model: googleAI.model("gemini-2.5-flash"),
+        model: model_speed,
         system: `
 ${mkPrelude(input.game)}
 
-The user will provide the name of a new place that should be added to the game.
-Use this name as inspiration to come up with a flushed-out description of the place.
-Additionally, come up with 3 connections that the new place has to other new places, such as doors, passageways, paths, or any other ways places can be connected.
+The user will provide the name of a new room that should be added to the game.
+Use this name as inspiration to come up with a flushed-out description of the room.
+Additionally, come up with 3 connections that the new room has to other new rooms, such as doors, passageways, paths, or any other ways rooms can be connected.
 `.trim(),
-        prompt: `${input.placeName}`,
+        prompt: `${input.roomName}`,
         output: {
           schema: z.object({
-            placeDescription: z
+            roomDescription: z
               .string()
-              .describe(`A one-paragraph description of ${input.placeName}.`),
+              .describe(`A one-paragraph description of ${input.roomName}.`),
             connections: z.array(
               z.object({
-                otherPlace: PlaceName.describe(
-                  "The name of the new place to connect to",
+                otherRoom: RoomName.describe(
+                  "The name of the new room to connect to",
                 ),
                 description: z
                   .string()
                   .describe(
-                    "A concise one-sentence description of how the doorway, passage, path, or other type of connection to the new place to connect to",
+                    "A concise one-sentence description of how the doorway, passage, path, or other type of connection to the new room to connect to",
                   ),
               }),
             ),
@@ -274,18 +293,18 @@ Additionally, come up with 3 connections that the new place has to other new pla
       });
 
       if (response.output === null)
-        throw new Error("GeneratePlace: response.output === null");
+        throw new Error("GenerateRoom: response.output === null");
 
       return {
         type: "ok",
         value: {
-          place: {
-            name: input.placeName,
-            description: response.output.placeDescription,
+          room: {
+            name: input.roomName,
+            description: response.output.roomDescription,
           },
           connections: response.output.connections.map((c) => ({
-            place1: input.placeName,
-            place2: c.otherPlace,
+            room1: input.roomName,
+            room2: c.otherRoom,
             description: c.description,
           })),
         },
@@ -301,21 +320,21 @@ Additionally, come up with 3 connections that the new place has to other new pla
 );
 
 // -----------------------------------------------------------------------------
-// GenerateItemsForPlace
+// GenerateItemsForRoom
 // -----------------------------------------------------------------------------
 
-export type GenerateItemsForPlace_Input = z.infer<
-  typeof GenerateItemsForPlace_Input
+export type GenerateItemsForRoom_Input = z.infer<
+  typeof GenerateItemsForRoom_Input
 >;
-export const GenerateItemsForPlace_Input = z.object({
+export const GenerateItemsForRoom_Input = z.object({
   game: Game,
-  place: PlaceName,
+  room: RoomName,
 });
 
-export type GenerateItemsForPlace_Output = z.infer<
-  typeof GenerateItemsForPlace_Output
+export type GenerateItemsForRoom_Output = z.infer<
+  typeof GenerateItemsForRoom_Output
 >;
-export const GenerateItemsForPlace_Output = Result(
+export const GenerateItemsForRoom_Output = Result(
   z.array(z.string()),
   z.object({
     itemsAndLocations: z.array(
@@ -324,38 +343,38 @@ export const GenerateItemsForPlace_Output = Result(
         description: z
           .string()
           .describe(
-            "A concise one-sentence description of where in the place that the item is located.",
+            "A concise one-sentence description of where in the room that the item is located.",
           ),
       }),
     ),
   }),
 );
 
-export const GenerateItemsForPlace = ai.defineFlow(
+export const GenerateItemsForRoom = ai.defineFlow(
   {
-    name: "GenerateItemsForPlace",
-    inputSchema: GenerateItemsForPlace_Input,
-    outputSchema: GenerateItemsForPlace_Output,
+    name: "GenerateItemsForRoom",
+    inputSchema: GenerateItemsForRoom_Input,
+    outputSchema: GenerateItemsForRoom_Output,
   },
-  async (input): Promise<GenerateItemsForPlace_Output> => {
+  async (input): Promise<GenerateItemsForRoom_Output> => {
     try {
       const response = await ai.generate({
-        model: googleAI.model("gemini-2.5-flash"),
+        model: model_speed,
         system: `
 ${mkPrelude(input.game)}
 
-The user will provide the name of a new place that was just added to the game.
+The user will provide the name of a new room that was just added to the game.
 Use this name as inspiration to come up with a list of items that will
 
-flushed-out description of the place.
-Additionally, come up with 3 connections that the new place has to other new places, such as doors, passageways, paths, or any other ways places can be connected.
+flushed-out description of the room.
+Additionally, come up with 3 connections that the new room has to other new rooms, such as doors, passageways, paths, or any other ways rooms can be connected.
 `.trim(),
-        prompt: `${input.place}`,
+        prompt: `${input.room}`,
         output: {
           schema: z.object({
-            placeDescription: z
+            roomDescription: z
               .string()
-              .describe(`A one-paragraph description of ${input.place}.`),
+              .describe(`A one-paragraph description of ${input.room}.`),
             itemsAndLocations: z.array(
               z.object({
                 itemName: ItemName,
@@ -365,7 +384,7 @@ Additionally, come up with 3 connections that the new place has to other new pla
                 itemLocationDescription: z
                   .string()
                   .describe(
-                    "A concise one-sentence description where exactly the item is in the place.",
+                    "A concise one-sentence description where exactly the item is in the room.",
                   ),
               }),
             ),
@@ -374,7 +393,7 @@ Additionally, come up with 3 connections that the new place has to other new pla
       });
 
       if (response.output === null)
-        throw new Error("GeneratePlace: response.output === null");
+        throw new Error("GenerateRoom: response.output === null");
 
       return {
         type: "ok",

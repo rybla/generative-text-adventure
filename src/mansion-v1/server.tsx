@@ -5,23 +5,19 @@ import {
   GenerateActionInterpretationDescription,
   GenerateActionPlanDescription,
   GenerateActions,
-  GenerateItemsForPlace,
-  GeneratePlace,
+  GenerateItemsForRoom,
+  GenerateRoom,
 } from "./ai";
 import { GameError } from "./error";
 import * as example1 from "./example/example1";
 import GameManager from "./GameManager";
 import index from "./index.html";
 import {
-  Action,
   Game,
   GameId,
   GameMetadata,
   GameStatus,
   GameStatusMessage,
-  Item,
-  Place,
-  PlaceConnection,
   PlayerMove,
 } from "./ontology";
 
@@ -117,30 +113,28 @@ async function promptGame(input: { prompt: string }): Promise<void> {
         result.value.forEach((content) => log({ type: "error", content }));
         throw new UpdateGameError();
       }
-      return result.value as { actions: Action[] };
+      return result.value;
     });
 
     // --------------------------------
     // before interpreting actions
     // --------------------------------
 
-    const playerMoveToNewPlace = actions.find(
-      (action): action is PlayerMove => {
-        switch (action.type) {
-          case "PlayerMove":
-            return gameManager.existsPlace(action.place);
-          default:
-            return false;
-        }
-      },
-    );
+    const playerMoveToNewRoom = actions.find((action): action is PlayerMove => {
+      switch (action.type) {
+        case "PlayerMove":
+          return !gameManager.existsRoom(action.room);
+        default:
+          return false;
+      }
+    });
 
-    // if the player is moving to a new place, then generate that new place and some items to go in it
-    if (playerMoveToNewPlace !== undefined) {
+    // if the player is moving to a new room, then generate that new room and some items to go in it
+    if (playerMoveToNewRoom !== undefined) {
       await do_(async () => {
-        const result = await GeneratePlace({
+        const result = await GenerateRoom({
           game: gameManager.game,
-          placeName: playerMoveToNewPlace.place,
+          roomName: playerMoveToNewRoom.room,
         });
 
         if (result.type === "error") {
@@ -148,18 +142,15 @@ async function promptGame(input: { prompt: string }): Promise<void> {
           throw new UpdateGameError();
         }
 
-        const place = result.value.place as Place;
+        const room = result.value.room;
 
-        gameManager.createPlace(
-          place,
-          result.value.connections as PlaceConnection[],
-        );
+        gameManager.createRoom(room, result.value.connections);
       });
 
       await do_(async () => {
-        const result = await GenerateItemsForPlace({
+        const result = await GenerateItemsForRoom({
           game: gameManager.game,
-          place: playerMoveToNewPlace.place,
+          room: playerMoveToNewRoom.room,
         });
 
         if (result.type === "error") {
@@ -167,16 +158,13 @@ async function promptGame(input: { prompt: string }): Promise<void> {
           throw new UpdateGameError();
         }
 
-        const itemsAndLocations = result.value.itemsAndLocations as {
-          item: Item;
-          description: string;
-        }[];
+        const itemsAndLocations = result.value.itemsAndLocations;
 
         for (const { item, description } of itemsAndLocations) {
           gameManager.createItem(item, {
-            type: "place",
+            type: "room",
             item: item.name,
-            place: playerMoveToNewPlace.place,
+            room: playerMoveToNewRoom.room,
             description,
           });
         }

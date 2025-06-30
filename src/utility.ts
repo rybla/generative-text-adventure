@@ -10,3 +10,7 @@ const x = Array.from(new Map<string, number>().values());
 // const x = [...new Map<string, number>().values()];
 
 export const deepcopy = <A>(x: A): A => JSON.parse(JSON.stringify(x));
+
+export function toReadOnlyArray<A>(xs: A[]): readonly A[] {
+  return Object.freeze(xs);
+}

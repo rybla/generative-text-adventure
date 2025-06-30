@@ -1,20 +1,15 @@
+import { do_, toReadOnlyArray } from "@/utility";
 import { z } from "genkit";
 
 // ------------------------------------------------
 // Names
 // ------------------------------------------------
 
-export type PlaceName = z.infer<typeof PlaceName>;
-export const PlaceName = z
-  .string()
-  .brand<"PlaceName">()
-  .describe("The name of a place.");
+export type RoomName = z.infer<typeof RoomName>;
+export const RoomName = z.string().describe("The name of a room.");
 
 export type ItemName = z.infer<typeof ItemName>;
-export const ItemName = z
-  .string()
-  .brand<"ItemName">()
-  .describe("The name of an item");
+export const ItemName = z.string().describe("The name of an item");
 
 // ------------------------------------------------
 // Item
@@ -29,15 +24,15 @@ export const Item = z.object({
 });
 
 // ------------------------------------------------
-// Place
+// Room
 // ------------------------------------------------
 
-export type Place = z.infer<typeof Place>;
-export const Place = z.object({
-  name: PlaceName.describe("The name of the place"),
+export type Room = z.infer<typeof Room>;
+export const Room = z.object({
+  name: RoomName.describe("The name of the room"),
   description: z
     .string()
-    .describe("A concise one-paragraph description of the place"),
+    .describe("A concise one-paragraph description of the room"),
 });
 
 // ------------------------------------------------
@@ -56,23 +51,23 @@ export const Player = z.object({
 
 export type PlayerLocation = z.infer<typeof PlayerLocation>;
 export const PlayerLocation = z.object({
-  place: PlaceName,
+  room: RoomName,
   description: z
     .string()
     .describe(
-      "A concise one-sentence description where exactly the player is currently located in the place.",
+      "A concise one-sentence description where exactly the player is currently located in the room.",
     ),
 });
 
-export type ItemLocationPlace = z.infer<typeof ItemLocationPlace>;
-const ItemLocationPlace = z.object({
-  type: z.enum(["place"]),
+export type ItemLocationRoom = z.infer<typeof ItemLocationRoom>;
+const ItemLocationRoom = z.object({
+  type: z.enum(["room"]),
   item: ItemName,
-  place: PlaceName,
+  room: RoomName,
   description: z
     .string()
     .describe(
-      "A concise one-sentence description where exactly the item is in the place.",
+      "A concise one-sentence description where exactly the item is in the room.",
     ),
 });
 
@@ -88,16 +83,16 @@ export const ItemLocationInventory = z.object({
 });
 
 export type ItemLocation = z.infer<typeof ItemLocation>;
-export const ItemLocation = z.union([ItemLocationPlace, ItemLocationInventory]);
+export const ItemLocation = z.union([ItemLocationRoom, ItemLocationInventory]);
 
-export type PlaceConnection = z.infer<typeof PlaceConnection>;
-export const PlaceConnection = z.object({
-  place1: PlaceName.describe("Place #1"),
-  place2: PlaceName.describe("Place #2"),
+export type RoomConnection = z.infer<typeof RoomConnection>;
+export const RoomConnection = z.object({
+  room1: RoomName.describe("Room #1"),
+  room2: RoomName.describe("Room #2"),
   description: z
     .string()
     .describe(
-      "A concise one-sentence description of how the doorway, passage, or other type of connection from the place #1 to the place #2.",
+      "A concise one-sentence description of how the doorway, passage, or other type of connection from the room #1 to the room #2.",
     ),
 });
 
@@ -127,10 +122,10 @@ export type PlayerDropItem = z.infer<typeof PlayerDropItem>;
 export const PlayerDropItem = z.object({
   type: z.enum(["PlayerDropItem"]),
   item: ItemName.describe("The item that the player drops"),
-  descriptionOfItemInPlace: z
+  descriptionOfItemInRoom: z
     .string()
     .describe(
-      "A concise one-sentence description of how the item is placed in the player's current place",
+      "A concise one-sentence description of how the item is roomd in the player's current room",
     ),
   description: z
     .string()
@@ -142,23 +137,215 @@ export const PlayerDropItem = z.object({
 export type PlayerMove = z.infer<typeof PlayerMove>;
 export const PlayerMove = z.object({
   type: z.enum(["PlayerMove"]),
-  place: PlaceName.describe("The place that the player moves to"),
-  descriptionOfPlayerInPlace: z
+  room: RoomName.describe("The room that the player moves to"),
+  descriptionOfPlayerInRoom: z
     .string()
     .describe(
-      "A concise one-sentence description of where exactly the player is in the new place",
+      "A concise one-sentence description of where exactly the player is in the new room",
     ),
   description: z
     .string()
     .describe(
-      "A concise one-sentence description of how the player moves to the new place",
+      "A concise one-sentence description of how the player moves to the new room",
+    ),
+});
+
+export type PlayerInspect = z.infer<typeof PlayerInspect>;
+export const PlayerInspect = z.object({
+  type: z.enum(["PlayerInspect"]),
+  inspectProcessDescription: z
+    .string()
+    .describe(
+      "A concise one-sentence description of how the player inspects an item, location, or anything else.",
+    ),
+  inspectResultDescription: z
+    .string()
+    .describe(
+      "A concise one-sentence description of what the player observes as a result of their inspection.",
+    ),
+});
+
+export type PlayerPass = z.infer<typeof PlayerPass>;
+export const PlayerPass = z.object({
+  type: z.enum(["PlayerPass"]),
+  description: z
+    .string()
+    .describe(
+      "A concise one-sentence description of how the player idly does something that doesn't modify the game state.",
     ),
 });
 
 // all actions
 
 export type Action = z.infer<typeof Action>;
-export const Action = z.union([PlayerTakeItem, PlayerDropItem, PlayerMove]);
+export const Action = z.union([
+  PlayerTakeItem,
+  PlayerDropItem,
+  PlayerMove,
+  PlayerInspect,
+  PlayerPass,
+]);
+
+export function describeAction(action: Action): string {
+  switch (action.type) {
+    case "PlayerDropItem":
+      return `${action.description} New location of the item in current room: ${action.descriptionOfItemInRoom}`;
+    case "PlayerTakeItem":
+      return `${action.description} New location of the item in the player's inventory: ${action.descriptionOfItemInInventory}`;
+    case "PlayerInspect":
+      return `${action.inspectProcessDescription} ${action.inspectResultDescription}`;
+    case "PlayerMove":
+      return `${action.description} New location of the player: ${action.descriptionOfPlayerInRoom}`;
+    case "PlayerPass":
+      return `${action.description}`;
+  }
+}
+
+// --------------------------------
+// specialized actions
+// --------------------------------
+
+export const PlayerTakeItem_specialized = (
+  game: Game,
+): z.ZodType<PlayerTakeItem> | undefined => {
+  const items = toReadOnlyArray(
+    game.state.itemLocations.flatMap((location): ItemName[] =>
+      location.type === "room" &&
+      location.room === game.state.playerLocation.room
+        ? [location.item]
+        : [],
+    ),
+  );
+
+  if (items.length === 0) return undefined;
+
+  return z.object({
+    type: z.enum(["PlayerTakeItem"]),
+    // item: ItemName.describe("The item that the player takes"),
+    item: z
+      .enum(items as readonly [ItemName, ...ItemName[]])
+      .describe("The item that the player takes"),
+    descriptionOfItemInInventory: z
+      .string()
+      .describe(
+        "A concise one-sentence description of exactly how the item is being held or otherwise stored by player",
+      ),
+    description: z
+      .string()
+      .describe(
+        "A concise one-sentence description of how the player takes the item",
+      ),
+  });
+};
+
+export const PlayerDropItem_specialized = (
+  game: Game,
+): z.ZodType<PlayerDropItem> | undefined => {
+  const items = toReadOnlyArray(
+    game.state.itemLocations.flatMap((location): ItemName[] =>
+      location.type === "inventory" ? [location.item] : [],
+    ),
+  );
+  if (items.length === 0) return undefined;
+
+  return z.object({
+    type: z.enum(["PlayerDropItem"]),
+    // item: ItemName.describe("The item that the player drops"),
+    item: z
+      .enum(items as readonly [ItemName, ...ItemName[]])
+      .describe("The item that the player drops"),
+    descriptionOfItemInRoom: z
+      .string()
+      .describe(
+        "A concise one-sentence description of how the item is roomd in the player's current room",
+      ),
+    description: z
+      .string()
+      .describe(
+        "A concise one-sentence description of how the player drops the item",
+      ),
+  });
+};
+
+export const PlayerMove_specialized = (
+  game: Game,
+): z.ZodType<PlayerMove> | undefined => {
+  const rooms = toReadOnlyArray(
+    game.state.roomConnections.flatMap((connection): RoomName[] =>
+      connection.room1 === game.state.playerLocation.room
+        ? [connection.room2]
+        : connection.room2 === game.state.playerLocation.room
+          ? [connection.room1]
+          : [],
+    ),
+  );
+  if (rooms.length === 0) return undefined;
+
+  return z.object({
+    type: z.enum(["PlayerMove"]),
+    // room: RoomName.describe("The room that the player moves to"),
+    room: z
+      .enum(rooms as readonly [RoomName, ...RoomName[]])
+      .describe("The room that the player moves to"),
+    descriptionOfPlayerInRoom: z
+      .string()
+      .describe(
+        "A concise one-sentence description of where exactly the player is in the new room",
+      ),
+    description: z
+      .string()
+      .describe(
+        "A concise one-sentence description of how the player moves to the new room",
+      ),
+  });
+};
+
+export const PlayerInspect_specialized = (
+  game: Game,
+): z.ZodType<PlayerInspect> | undefined => {
+  return z.object({
+    type: z.enum(["PlayerInspect"]),
+    inspectProcessDescription: z
+      .string()
+      .describe(
+        "A concise one-sentence description of how the player inspects an item, location, or anything else.",
+      ),
+    inspectResultDescription: z
+      .string()
+      .describe(
+        "A concise one-sentence description of what the player observes as a result of their inspection.",
+      ),
+  });
+};
+
+/**
+ * These actions are specialized to the current state of the game. So, for example, they make it so that the player can _only_ interact with items or go to rooms that are actually available.
+ */
+export const Action_specialized = (game: Game): z.ZodType<Action> => {
+  // @ts-ignore
+  const actions: readonly z.ZodType<Action>[] = toReadOnlyArray(
+    [
+      PlayerDropItem_specialized(game),
+      PlayerMove_specialized(game),
+      PlayerTakeItem_specialized(game),
+      PlayerInspect_specialized(game),
+    ].filter((action) => action !== undefined),
+  );
+
+  if (actions.length === 0) {
+    return PlayerPass;
+  } else if (actions.length === 1) {
+    return actions[0];
+  } else {
+    return z.union(
+      actions as readonly [
+        z.ZodType<Action>,
+        z.ZodType<Action>,
+        ...z.ZodType<Action>[],
+      ],
+    );
+  }
+};
 
 // ------------------------------------------------
 // Turn
@@ -192,7 +379,7 @@ export const GameState = z.object({
   //
   // things
   //
-  places: z.array(Place).describe("All of the places in the game."),
+  rooms: z.array(Room).describe("All of the rooms in the game."),
   items: z.array(Item).describe("All of the items in the game."),
   //
   // relationships
@@ -201,9 +388,9 @@ export const GameState = z.object({
   itemLocations: z
     .array(ItemLocation)
     .describe("For each item in the game, its location."),
-  placeConnections: z
-    .array(PlaceConnection)
-    .describe("All of the connections between places in the game."),
+  roomConnections: z
+    .array(RoomConnection)
+    .describe("All of the connections between rooms in the game."),
 });
 
 // ------------------------------------------------

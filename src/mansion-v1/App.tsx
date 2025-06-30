@@ -2,9 +2,9 @@ import { do_ } from "@/utility";
 import { KeyboardEventHandler, useEffect, useRef, useState } from "react";
 import "./App.css";
 import {
-  getCurrentPlace,
-  getCurrentPlaceConnections,
-  getCurrentPlaceItems,
+  getCurrentRoom,
+  getCurrentRoomConnections,
+  getCurrentRoomItems,
   getCurrentPlayerLocation,
   getInventory,
   getItem,
@@ -17,6 +17,7 @@ export default function App() {
     undefined,
   );
   const consoleInputRef = useRef<HTMLTextAreaElement>(null);
+  const leftColumnRef = useRef<HTMLDivElement>(null);
 
   const [savedGameMetadatas, set_savedGameMetadatas] = useState<GameMetadata[]>(
     [],
@@ -57,6 +58,13 @@ export default function App() {
     ).json();
     // console.log(`gameStatus:\n${JSON.stringify(gameStatus, null, 4)}`);
     set_gameStatus(gameStatus);
+
+    // consoleInputRef.current?.scrollIntoView({
+    //   behavior: "smooth",
+    //   block: "end",
+    // });
+
+    leftColumnRef.current!.scrollTop = leftColumnRef.current!.scrollHeight;
   };
 
   const update_savedGameMetadatas = async () => {
@@ -88,7 +96,18 @@ export default function App() {
   > = async (event) => {
     // console.log(event.key);
     if (event.key === "Enter") {
-      await promptGame(event.currentTarget.value.trim());
+      const prompt = event.currentTarget.value.trim();
+      consoleInputRef.current!.value = "";
+      await promptGame(prompt);
+    }
+  };
+
+  const consoleInput_onKeyUp: KeyboardEventHandler<
+    HTMLTextAreaElement
+  > = async (event) => {
+    // console.log(event.key);
+    if (event.key === "Enter") {
+      consoleInputRef.current!.value = "";
     }
   };
 
@@ -117,151 +136,153 @@ export default function App() {
     );
   }
 
-  return (
-    <div className="App">
-      <div className="section-label">generative-text-adventure</div>
-      <div className="toolbar">
-        <button onClick={async () => await newGame()}>New Game</button>
-        <button onClick={async () => await saveGame()}>Save Game</button>
-        <div>
-          {savedGameMetadatas.map((metadata, i) => (
-            <div key={i}>
-              <button onClick={async () => await loadGame(metadata.id)}>
-                {metadata.name}
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-      {game !== undefined ? (
-        <div className="Game">
-          <div className="section-label">Game</div>
-          <div className="GameMetadata">
-            <div className="section-label">Metadata</div>
-            <div className="name">{game.metadata.name}</div>
-            <div className="creationDateTime">
-              {renderDateTime(new Date(game.metadata.creationDateTime))}
-            </div>
-          </div>
-          <div className="GameState">
-            <div className="player">
-              <div className="section-label">Player</div>
-              <div className="name">
-                <span className="value-label">Name:</span>{" "}
-                {game.state.player.name}
-              </div>
-              <div className="description">
-                <span className="value-label">Description:</span>{" "}
-                {game.state.player.description}
-              </div>
-              <div className="inventory">
-                <span className="value-label">Inventory:</span>{" "}
-                <ul>
-                  {getInventory(game).map((itemLocation, i) => (
-                    <li key={i}>
-                      <div className="ItemLocation">
-                        <div className="name">{itemLocation.item}</div>
-                        <div className="description">
-                          {getItem(game, itemLocation.item).description}
-                        </div>
-                        <div className="itemLocationDescription">
-                          {itemLocation.description}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-            <div className="playerLocation">
-              <div className="section-label">Current Location</div>
-              <div className="placeName">
-                <span className="value-label">Name:</span>{" "}
-                {getCurrentPlace(game).name}
-              </div>
-              <span className="value-label">Description:</span>{" "}
-              <div className="placeDescription">
-                {getCurrentPlayerLocation(game).description}
-              </div>
-              <div className="playerLocationDescription">
-                {getCurrentPlace(game).description}
-              </div>
-              <div className="items">
-                <span className="value-label">Items:</span>{" "}
-                <ul>
-                  {getCurrentPlaceItems(game).map((location, i) => (
-                    <li key={i}>
-                      <div className="ItemLocation">
-                        <div className="name">{location.item}</div>
-                        <div className="description">
-                          {getItem(game, location.item).description}
-                        </div>
-                        <div className="itemLocationDescription">
-                          {location.description}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="connections">
-                <span className="value-label">Connections:</span>{" "}
-                <ul>
-                  {getCurrentPlaceConnections(game).map((connection, i) => (
-                    <li key={i}>
-                      <div className="PlaceConnection">
-                        <div className="name">
-                          {connection.place2 === getCurrentPlace(game).name
-                            ? connection.place1
-                            : connection.place2}
-                        </div>
-                        <div className="description">
-                          {connection.description}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-          <div className="turns">
-            <div className="section-label">Turns</div>
-            {game.turns.map((turn, i) => (
-              <div key={i} className="Turn">
-                <div className="prompt">{turn.prompt}</div>
-                <div className="description">{turn.description}</div>
+  function renderGameState(game: Game) {
+    return (
+      <div className="GameState">
+        <div className="player">
+          <div className="section-label">Player</div>
+          <div className="name">{game.state.player.name}</div>
+          <div className="description">{game.state.player.description}</div>
+          <div className="Inventory">
+            <span className="value-label">Inventory:</span>{" "}
+            {getInventory(game).map((itemLocation, i) => (
+              <div className="ItemAndLocation" key={i}>
+                <div className="itemName">{itemLocation.item}</div>
+                <div className="itemDescription">
+                  {getItem(game, itemLocation.item).description}
+                </div>
+                <div className="itemLocationDescription">
+                  {itemLocation.description}
+                </div>
               </div>
             ))}
           </div>
         </div>
-      ) : (
-        <></>
-      )}
+        <div className="playerLocation">
+          <div className="section-label">Current Location</div>
+          <div className="roomName">{getCurrentRoom(game).name}</div>
+          <div className="roomDescription">
+            {getCurrentPlayerLocation(game).description}
+          </div>
+          <div className="playerLocationDescription">
+            {getCurrentRoom(game).description}
+          </div>
+          <div className="RoomItems">
+            <span className="value-label">Items:</span>{" "}
+            {getCurrentRoomItems(game).map((location, i) => (
+              <div className="ItemAndLocation" key={i}>
+                <div className="itemName">{location.item}</div>
+                <div className="itemDescription">
+                  {getItem(game, location.item).description}
+                </div>
+                <div className="itemLocationDescription">
+                  {location.description}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="Connections">
+            <span className="value-label">Connections:</span>{" "}
+            {getCurrentRoomConnections(game).map((connection, i) => (
+              <div className="RoomConnection" key={i}>
+                <div className="name">
+                  {connection.room2 === getCurrentRoom(game).name
+                    ? connection.room1
+                    : connection.room2}
+                </div>
+                <div className="description">{connection.description}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
+  function renderGameMetadata(game: Game) {
+    return (
+      <div className="GameMetadata">
+        <div className="section-label">Metadata</div>
+        <div className="name">{game.metadata.name}</div>
+        <div className="creationDateTime">
+          {renderDateTime(new Date(game.metadata.creationDateTime))}
+        </div>
+      </div>
+    );
+  }
+
+  function renderTurns(game: Game) {
+    return (
+      <div className="Turns">
+        <div className="section-label">Turns</div>
+        {game.turns.map((turn, i) => (
+          <div key={i} className="Turn">
+            <div className="prompt">{turn.prompt}</div>
+            <div className="description">{turn.description}</div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  function renderToolbar() {
+    return (
+      <div className="Toolbar">
+        <button onClick={async () => await newGame()}>New Game</button>
+        <button onClick={async () => await saveGame()}>Save Game</button>
+        {savedGameMetadatas.map((metadata, i) => (
+          <button onClick={async () => await loadGame(metadata.id)} key={i}>
+            {metadata.name}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  function renderConsole() {
+    return (
       <div className="Console">
         <div className="section-label">Console</div>
         <textarea
           ref={consoleInputRef}
           id="consoleInput"
           onKeyDown={consoleInput_onKeyDown}
+          onKeyUp={consoleInput_onKeyUp}
         />
       </div>
+    );
+  }
 
-      {gameStatus !== undefined ? (
-        <div className="GameStatus">
-          <div className="section-label">Status</div>
-          <div className="messages">
-            {gameStatus.messages.map((message, i) => (
-              <div className={`message ${message.type}`} key={i}>
-                {message.content}
-              </div>
-            ))}
-          </div>
+  function renderGameStatus(gameStatus: GameStatus) {
+    return (
+      <div className="GameStatus">
+        <div className="section-label">Status</div>
+        <div className="messages">
+          {gameStatus.messages.map((message, i) => (
+            <div className={`message ${message.type}`} key={i}>
+              {message.content}
+            </div>
+          ))}
         </div>
-      ) : (
-        <></>
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="App">
+      <div className="left" ref={leftColumnRef}>
+        {game !== undefined ? renderTurns(game) : <></>}
+        {renderConsole()}
+      </div>
+      <div className="middle">
+        {game !== undefined ? renderGameState(game) : <></>}
+      </div>
+      <div className="right">
+        <div className="section-label">generative-text-adventure</div>
+        {game !== undefined ? renderGameMetadata(game) : <></>}
+        {renderToolbar()}
+        {gameStatus !== undefined ? renderGameStatus(gameStatus) : <></>}
+      </div>
     </div>
   );
 }
