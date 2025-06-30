@@ -1,5 +1,5 @@
 import * as fs from "fs/promises";
-import { z } from "genkit";
+import { z } from "zod";
 import { deepcopy, do_ } from "../utility";
 import {
   GenerateActionInterpretationDescription,

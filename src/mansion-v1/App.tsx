@@ -1,7 +1,6 @@
 import { do_ } from "@/utility";
 import { useEffect, useState } from "react";
-import type { Game, GameMetadata, GameStatus } from "./ontology";
-// import { GameManager } from "./ontology";
+import { Game, GameMetadata, GameStatus } from "./ontology";
 
 export default function App() {
   const [game, set_game] = useState<Game | undefined>(undefined);
@@ -40,10 +39,19 @@ export default function App() {
   // updates
 
   const update_game = async () => {
-    set_game(await (await fetch("/api/getGame", { method: "POST" })).json());
-    set_gameStatus(
+    const game = Game.parse(
+      await (await fetch("/api/getGame", { method: "POST" })).json(),
+    );
+    console.log(`game:\n${JSON.stringify(game, null, 4)}`);
+    // console.log(`game === undefined: ${game === undefined}`);
+    // console.log(`game === null: ${game === null}`);
+    set_game(game);
+
+    const gameStatus = GameStatus.parse(
       await (await fetch("/api/getGameStatus", { method: "POST" })).json(),
     );
+    console.log(`gameStatus:\n${JSON.stringify(gameStatus, null, 4)}`);
+    set_gameStatus(gameStatus);
   };
 
   const update_savedGameMetadatas = async () => {
@@ -88,10 +96,10 @@ export default function App() {
         <button onClick={async () => await newGame()}>New Game</button>
         <button onClick={async () => await saveGame()}>Save Game</button>
         <div>
-          {savedGameMetadatas.map((md, i) => (
+          {savedGameMetadatas.map((metadata, i) => (
             <div key={i}>
-              <button onClick={async () => await loadGame(md.id)}>
-                {md.name}
+              <button onClick={async () => await loadGame(metadata.id)}>
+                {metadata.name}
               </button>
             </div>
           ))}
