@@ -3,6 +3,7 @@ import { KeyboardEventHandler, useEffect, useRef, useState } from "react";
 import "./App.css";
 import {
   getCurrentPlace,
+  getCurrentPlaceConnections,
   getCurrentPlaceItems,
   getCurrentPlayerLocation,
   getInventory,
@@ -158,11 +159,8 @@ export default function App() {
                 <ul>
                   {getInventory(game).map((itemLocation, i) => (
                     <li key={i}>
-                      <div className="Item">
-                        <div className="name">
-                          <span className="value-label">Name:</span>{" "}
-                          {itemLocation.item}
-                        </div>
+                      <div className="ItemLocation">
+                        <div className="name">{itemLocation.item}</div>
                         <div className="description">
                           {getItem(game, itemLocation.item).description}
                         </div>
@@ -191,12 +189,34 @@ export default function App() {
               <div className="items">
                 <span className="value-label">Items:</span>{" "}
                 <ul>
-                  {getCurrentPlaceItems(game).map((itemLocation, i) => (
+                  {getCurrentPlaceItems(game).map((location, i) => (
                     <li key={i}>
                       <div className="ItemLocation">
-                        <div className="name">{itemLocation.item}</div>
+                        <div className="name">{location.item}</div>
                         <div className="description">
-                          {itemLocation.description}
+                          {getItem(game, location.item).description}
+                        </div>
+                        <div className="itemLocationDescription">
+                          {location.description}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="connections">
+                <span className="value-label">Connections:</span>{" "}
+                <ul>
+                  {getCurrentPlaceConnections(game).map((connection, i) => (
+                    <li key={i}>
+                      <div className="PlaceConnection">
+                        <div className="name">
+                          {connection.place2 === getCurrentPlace(game).name
+                            ? connection.place1
+                            : connection.place2}
+                        </div>
+                        <div className="description">
+                          {connection.description}
                         </div>
                       </div>
                     </li>

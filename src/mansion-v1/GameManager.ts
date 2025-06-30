@@ -252,10 +252,10 @@ The player's name is "${game.state.player.name}". ${game.state.player.descriptio
 
 The player inventory contains:
 ${getInventory(game)
-  .map((itemLocation) =>
+  .map((location) =>
     `
-- "${itemLocation.item}": ${itemLocation.description}
-- Description: ${getItem(game, itemLocation.item).description}
+  - "${location.item}": ${location.description}
+  - Description: ${getItem(game, location.item).description}
     `.trim(),
   )
   .join("\n")
@@ -264,6 +264,17 @@ ${getInventory(game)
 ## Current Place
 
 The player is currently in "${game.state.playerLocation.place}": ${game.state.playerLocation.description}
+
+The following items are in this place:
+${getCurrentPlaceItems(game)
+  .map((location) =>
+    `
+  - "${location.item}": ${location.description}
+  - Description: ${getItem(game, location.item).description}
+    `.trim(),
+  )
+  .join("\n")
+  .trim()}
 
 ## Connected Places
 

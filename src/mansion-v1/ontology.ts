@@ -66,7 +66,7 @@ export const PlayerLocation = z.object({
 
 export type ItemLocationPlace = z.infer<typeof ItemLocationPlace>;
 const ItemLocationPlace = z.object({
-  type: z.literal("place"),
+  type: z.enum(["place"]),
   item: ItemName,
   place: PlaceName,
   description: z
@@ -78,7 +78,7 @@ const ItemLocationPlace = z.object({
 
 export type ItemLocationInventory = z.infer<typeof ItemLocationInventory>;
 export const ItemLocationInventory = z.object({
-  type: z.literal("inventory"),
+  type: z.enum(["inventory"]),
   item: ItemName,
   description: z
     .string()
@@ -109,7 +109,7 @@ export const PlaceConnection = z.object({
 
 export type PlayerTakeItem = z.infer<typeof PlayerTakeItem>;
 export const PlayerTakeItem = z.object({
-  type: z.literal("PlayerTakeItem"),
+  type: z.enum(["PlayerTakeItem"]),
   item: ItemName.describe("The item that the player takes"),
   descriptionOfItemInInventory: z
     .string()
@@ -125,7 +125,7 @@ export const PlayerTakeItem = z.object({
 
 export type PlayerDropItem = z.infer<typeof PlayerDropItem>;
 export const PlayerDropItem = z.object({
-  type: z.literal("PlayerDropItem"),
+  type: z.enum(["PlayerDropItem"]),
   item: ItemName.describe("The item that the player drops"),
   descriptionOfItemInPlace: z
     .string()
@@ -141,7 +141,7 @@ export const PlayerDropItem = z.object({
 
 export type PlayerMove = z.infer<typeof PlayerMove>;
 export const PlayerMove = z.object({
-  type: z.literal("PlayerMove"),
+  type: z.enum(["PlayerMove"]),
   place: PlaceName.describe("The place that the player moves to"),
   descriptionOfPlayerInPlace: z
     .string()
@@ -252,8 +252,8 @@ export type Result<Error, Ok> =
 
 export const Result = <Error, Ok>(error: z.ZodType<Error>, ok: z.ZodType<Ok>) =>
   z.union([
-    z.object({ type: z.literal("error"), value: error }),
-    z.object({ type: z.literal("ok"), value: ok }),
+    z.object({ type: z.enum(["error"]), value: error }),
+    z.object({ type: z.enum(["ok"]), value: ok }),
   ]);
 
 export const mkError = <Error, Ok = any>(value: Error): Result<Error, Ok> => ({

@@ -25,6 +25,12 @@ export const ai = genkit({ plugins: [googleAI()] });
 const mkPrelude = (game: Game) =>
   `
 You are the game master for a unique and creative text adventure game.
+For all of your tasks, make sure to follow these rules:
+- ALWAYS refer to the items, places, etc. by their full exact names when using it as an output field's value.
+  - NEVER use articles like "the" before the name.
+  - NEVER wrap names in quotes.
+- The player is ONLY allowed to take or drop items that are explicitly listed in their inventory or in their current location.
+- The player is only allowed to move to other places that are explicitly listed as connected to their current location.
     `.trim();
 
 // -----------------------------------------------------------------------------
@@ -36,6 +42,7 @@ export type GenerateActionPlanDescription_Input = z.infer<
 >;
 export const GenerateActionPlanDescription_Input = z.object({
   game: Game,
+  prompt: z.string(),
 });
 
 export type GenerateActionPlanDescription_Output = z.infer<
@@ -63,7 +70,7 @@ export const GenerateActionPlanDescription = ai.defineFlow(
         system: `
 ${mkPrelude(input.game)}
 
-The user will describe in natural langauge what they want to do next in the game. Your task is to consider the user's description in order to reply with a one-paragraph description of what the player does next and what happens in the game as an immediate consequence.
+The user will attach a file that describes the current status of the game and then describe in natural language what they want to do next in the game. Your task is to consider the user's description in order to reply with a one-paragraph description of what the player does next and what happens in the game as an immediate consequence.
         `.trim(),
         prompt: [
           {
@@ -71,7 +78,7 @@ The user will describe in natural langauge what they want to do next in the game
               url: `data:text/markdown;base64,${Buffer.from(gameManager.getGameDescription(), "utf8").toString("base64")}`,
             },
           },
-          { text: `${prompt}` },
+          { text: input.prompt },
         ],
       });
 
@@ -149,6 +156,7 @@ export type GenerateActionInterpretationDescription_Input = z.infer<
 >;
 export const GenerateActionInterpretationDescription_Input = z.object({
   game: Game,
+  prompt: z.string(),
   actions: z.array(Action),
 });
 
@@ -171,14 +179,20 @@ export const GenerateActionInterpretationDescription = ai.defineFlow(
   async (input): Promise<GenerateActionInterpretationDescription_Output> => {
     try {
       const response = await ai.generate({
-        model: googleAI.model("gemini-2.5-pro"),
+        model: googleAI.model("gemini-2.5-flash"),
         system: `
 ${mkPrelude(input.game)}
 
-The user will provide the list of actions that occured in the current turm. Your task is to write a short paragraph that rephrases the information from the actions into a narrative story-telling form. Reply with JUST the one-paragraph description.
+The user will provide the textual prompt they wrote to describe what they wanted to do this turn and a list of actions that they actually did this turn. Your task is to write a short paragraph that, keeping the context of what the user was intending to do in mind, rephrases the actions that the player took into a narrative story-telling form. Reply with JUST the one-paragraph description.
           `.trim(),
         prompt: `
-In the last turn, the player took the following actions:
+What I intended to do this turn:
+${input.prompt
+  .split("\n")
+  .map((s) => `> ${s}`)
+  .join("\n")}
+
+Actions I actually took this turn:
 ${input.actions
   .map(
     (action) => `
@@ -229,7 +243,7 @@ export const GeneratePlace = ai.defineFlow(
   async (input): Promise<GeneratePlace_Output> => {
     try {
       const response = await ai.generate({
-        model: googleAI.model("gemini-2.5-pro"),
+        model: googleAI.model("gemini-2.5-flash"),
         system: `
 ${mkPrelude(input.game)}
 
@@ -326,7 +340,7 @@ export const GenerateItemsForPlace = ai.defineFlow(
   async (input): Promise<GenerateItemsForPlace_Output> => {
     try {
       const response = await ai.generate({
-        model: googleAI.model("gemini-2.5-pro"),
+        model: googleAI.model("gemini-2.5-flash"),
         system: `
 ${mkPrelude(input.game)}
 
